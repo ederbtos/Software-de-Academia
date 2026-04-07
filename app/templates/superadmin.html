@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Superadmin — Academias{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="fw-bold mb-0"><i class="bi bi-building me-2 text-primary"></i>Painel Superadmin — Academias</h4>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovaAcademia">
+    <i class="bi bi-plus-lg me-1"></i>Nova Academia
+  </button>
+</div>
+
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+{% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr><th>#</th><th>Nome</th><th>Slug</th><th>CNPJ</th><th>Status</th><th>Schema</th><th>Criado em</th></tr>
+      </thead>
+      <tbody>
+        {% for a in academias %}
+        <tr>
+          <td>{{ a.id }}</td>
+          <td><strong>{{ a.nome }}</strong></td>
+          <td><code>{{ a.slug }}</code></td>
+          <td>{{ a.cnpj or "—" }}</td>
+          <td>
+            {% if a.status.value == "ativa" %}<span class="badge bg-success">Ativa</span>
+            {% elif a.status.value == "suspensa" %}<span class="badge bg-warning text-dark">Suspensa</span>
+            {% else %}<span class="badge bg-secondary">Inativa</span>{% endif %}
+          </td>
+          <td><code>{{ a.schema_name }}</code></td>
+          <td>{{ a.criado_em.strftime("%d/%m/%Y") }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-4">Nenhuma academia cadastrada</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal Nova Academia -->
+<div class="modal fade" id="modalNovaAcademia" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Nova Academia</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/superadmin/academias/form">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Nome *</label>
+              <input type="text" name="nome" class="form-control" required/>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Slug (subdomínio) *</label>
+              <input type="text" name="slug" class="form-control" required placeholder="fitclub"/>
+              <div class="form-text">Apenas letras minúsculas, números e hífens</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">CNPJ</label>
+              <input type="text" name="cnpj" class="form-control"/>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Telefone</label>
+              <input type="text" name="telefone" class="form-control"/>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">E-mail</label>
+              <input type="email" name="email" class="form-control"/>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Criar Academia</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

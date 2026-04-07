@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h4 class="fw-bold mb-4"><i class="bi bi-speedometer2 me-2 text-primary"></i>Dashboard</h4>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card p-3 stat-card border-primary">
+      <div class="text-muted small">Alunos Ativos</div>
+      <div class="fs-2 fw-bold text-primary">{{ stats.total_alunos_ativos }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card p-3 stat-card border-success">
+      <div class="text-muted small">Check-ins Hoje</div>
+      <div class="fs-2 fw-bold text-success">{{ stats.checkins_hoje }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card p-3 stat-card border-danger">
+      <div class="text-muted small">Mensalidades em Atraso</div>
+      <div class="fs-2 fw-bold text-danger">{{ stats.mensalidades_em_atraso }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card p-3 stat-card border-warning">
+      <div class="text-muted small">Receita do Mês</div>
+      <div class="fs-2 fw-bold text-warning">R$ {{ "%.2f"|format(stats.receita_mes_atual) }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="card p-3">
+      <div class="text-muted small">Alunos sem Treino</div>
+      <div class="fs-3 fw-bold text-secondary">{{ stats.alunos_sem_treino }}</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card p-3">
+      <div class="text-muted small">Avaliações este Mês</div>
+      <div class="fs-3 fw-bold text-info">{{ stats.avaliacoes_mes_atual }}</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card p-3">
+      <div class="text-muted small">Alunos Inativos</div>
+      <div class="fs-3 fw-bold text-secondary">{{ stats.total_alunos_inativos }}</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
