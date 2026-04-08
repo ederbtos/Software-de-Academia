@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}Aulas Coletivas{% endblock %}
+{% block page_title %}<i class="bi bi-calendar3 me-2" style="color:#6366f1;"></i>Aulas Coletivas{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovaAula">
+    <i class="bi bi-plus-lg me-1"></i>Nova Aula
+  </button>
+{% endblock %}
+
+{% block content %}
+{% set dias = ['segunda','terca','quarta','quinta','sexta','sabado','domingo'] %}
+{% set dias_label = {'segunda':'Segunda','terca':'Terça','quarta':'Quarta','quinta':'Quinta','sexta':'Sexta','sabado':'Sábado','domingo':'Domingo'} %}
+{% set dia_colors = {'segunda':'#6366f1','terca':'#0284c7','quarta':'#16a34a','quinta':'#ca8a04','sexta':'#dc2626','sabado':'#7c3aed','domingo':'#0f172a'} %}
+{% set dia_bg = {'segunda':'#ede9fe','terca':'#e0f2fe','quarta':'#dcfce7','quinta':'#fefce8','sexta':'#fee2e2','sabado':'#f5f3ff','domingo':'#f1f5f9'} %}
+
+{% if aulas %}
+<div class="row g-4">
+  {% for dia in dias %}
+  {% set aulas_dia = aulas | selectattr('dia_semana.value', 'equalto', dia) | list %}
+  {% if aulas_dia %}
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center gap-2">
+        <span class="week-day-badge" style="background:{{ dia_colors[dia] }};">
+          {{ dias_label[dia] }}
+        </span>
+        <span class="badge" style="background:#f1f5f9;color:#64748b;">{{ aulas_dia|length }} aula(s)</span>
+      </div>
+      <div class="card-body p-3">
+        {% for aula in aulas_dia | sort(attribute='horario_inicio') %}
+        <div class="mb-3 p-3 rounded-3" style="background:#f8fafc;border:1px solid #e2e8f0;">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+              <div class="fw-semibold" style="color:#1e293b;">{{ aula.nome }}</div>
+              <div class="text-muted" style="font-size:.78rem;">
+                <i class="bi bi-clock me-1"></i>
+                {{ aula.horario_inicio.strftime("%H:%M") if aula.horario_inicio else "" }}
+                {% if aula.horario_fim %}— {{ aula.horario_fim.strftime("%H:%M") }}{% endif %}
+              </div>
+              {% if aula.professor %}
+              <div class="text-muted" style="font-size:.76rem;">
+                <i class="bi bi-person me-1"></i>{{ aula.professor.nome }}
+              </div>
+              {% endif %}
+            </div>
+            <div class="text-end">
+              <div class="fw-bold" style="font-size:.8rem;color:#6366f1;">
+                {{ aula.inscricoes_confirmadas }}/{{ aula.capacidade_maxima }}
+              </div>
+              <div style="font-size:.68rem;color:#94a3b8;">vagas</div>
+            </div>
+          </div>
+          <!-- barra de ocupação -->
+          {% set pct = (aula.inscricoes_confirmadas / aula.capacidade_maxima * 100)|int if aula.capacidade_maxima > 0 else 0 %}
+          <div class="progress mb-2" style="height:4px;border-radius:4px;">
+            <div class="progress-bar" role="progressbar" style="width:{{ pct }}%;
+              background:{% if pct >= 90 %}#dc2626{% elif pct >= 60 %}#ca8a04{% else %}#16a34a{% endif %};"></div>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm flex-grow-1" style="background:#ede9fe;color:#4f46e5;font-size:.78rem;"
+                    data-bs-toggle="modal" data-bs-target="#modalInscrever"
+                    data-aulaid="{{ aula.id }}" data-aulanome="{{ aula.nome }}">
+              <i class="bi bi-person-plus me-1"></i>Inscrever
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" style="font-size:.78rem;"
+                    data-bs-toggle="modal" data-bs-target="#modalEditarAula"
+                    data-id="{{ aula.id }}" data-nome="{{ aula.nome }}"
+                    data-dia="{{ aula.dia_semana.value }}"
+                    data-inicio="{{ aula.horario_inicio.strftime('%H:%M') if aula.horario_inicio else '' }}"
+                    data-fim="{{ aula.horario_fim.strftime('%H:%M') if aula.horario_fim else '' }}"
+                    data-cap="{{ aula.capacidade_maxima }}"
+                    data-prof="{{ aula.professor_id or '' }}">
+              <i class="bi bi-pencil"></i>
+            </button>
+            <form method="post" action="/aulas/{{ aula.id }}/desativar" class="m-0">
+              <button type="submit" class="btn btn-sm btn-outline-warning" style="font-size:.78rem;"
+                      onclick="return confirm('Desativar {{ aula.nome }}?')">
+                <i class="bi bi-x-circle"></i>
+              </button>
+            </form>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% endfor %}
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <i class="bi bi-calendar3"></i>
+    <p>Nenhuma aula cadastrada ainda.</p>
+    <button class="btn btn-primary btn-sm mt-2" data-bs-toggle="modal" data-bs-target="#modalNovaAula">
+      <i class="bi bi-plus me-1"></i>Criar primeira aula
+    </button>
+  </div>
+</div>
+{% endif %}
+
+<!-- Modal Nova Aula -->
+<div class="modal fade" id="modalNovaAula" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Nova Aula</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <form method="post" action="/aulas">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12"><label class="form-label">Nome *</label><input type="text" name="nome" class="form-control" required/></div>
+            <div class="col-md-6">
+              <label class="form-label">Dia da Semana *</label>
+              <select name="dia_semana" class="form-select" required>
+                {% for d in dias %}<option value="{{ d }}">{{ dias_label[d] }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3"><label class="form-label">Início</label><input type="time" name="horario_inicio" class="form-control" required/></div>
+            <div class="col-md-3"><label class="form-label">Fim</label><input type="time" name="horario_fim" class="form-control" required/></div>
+            <div class="col-md-6">
+              <label class="form-label">Professor</label>
+              <select name="professor_id" class="form-select">
+                <option value="">— Nenhum —</option>
+                {% for f in professores %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6"><label class="form-label">Capacidade Máx.</label><input type="number" name="capacidade_maxima" class="form-control" value="20" required/></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Criar Aula</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Editar Aula -->
+<div class="modal fade" id="modalEditarAula" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Editar Aula</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="formEditarAula" method="post" action="">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12"><label class="form-label">Nome *</label><input type="text" name="nome" id="editAulaNome" class="form-control" required/></div>
+            <div class="col-md-6">
+              <label class="form-label">Dia da Semana *</label>
+              <select name="dia_semana" id="editAulaDia" class="form-select" required>
+                {% for d in dias %}<option value="{{ d }}">{{ dias_label[d] }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3"><label class="form-label">Início</label><input type="time" name="horario_inicio" id="editAulaInicio" class="form-control" required/></div>
+            <div class="col-md-3"><label class="form-label">Fim</label><input type="time" name="horario_fim" id="editAulaFim" class="form-control" required/></div>
+            <div class="col-md-6">
+              <label class="form-label">Professor</label>
+              <select name="professor_id" id="editAulaProf" class="form-select">
+                <option value="">— Nenhum —</option>
+                {% for f in professores %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6"><label class="form-label">Capacidade Máx.</label><input type="number" name="capacidade_maxima" id="editAulaCap" class="form-control" required/></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Inscrever Aluno -->
+<div class="modal fade" id="modalInscrever" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Inscrever Aluno — <span id="nomeAulaModal"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/aulas/inscrever">
+        <input type="hidden" name="aula_id" id="inputAulaId"/>
+        <div class="modal-body">
+          <label class="form-label">Aluno *</label>
+          <select name="aluno_id" class="form-select" required>
+            <option value="">— Selecione —</option>
+            {% for a in alunos %}<option value="{{ a.id }}">{{ a.nome }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Inscrever</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+document.getElementById('modalInscrever').addEventListener('show.bs.modal', function(e) {
+  const btn = e.relatedTarget;
+  document.getElementById('inputAulaId').value = btn.dataset.aulaid;
+  document.getElementById('nomeAulaModal').textContent = btn.dataset.aulanome;
+});
+document.getElementById('modalEditarAula').addEventListener('show.bs.modal', function(e) {
+  const btn = e.relatedTarget;
+  document.getElementById('formEditarAula').action = '/aulas/' + btn.dataset.id + '/editar';
+  document.getElementById('editAulaNome').value = btn.dataset.nome;
+  document.getElementById('editAulaDia').value = btn.dataset.dia;
+  document.getElementById('editAulaInicio').value = btn.dataset.inicio;
+  document.getElementById('editAulaFim').value = btn.dataset.fim;
+  document.getElementById('editAulaCap').value = btn.dataset.cap;
+  document.getElementById('editAulaProf').value = btn.dataset.prof;
+});
+</script>
+{% endblock %}

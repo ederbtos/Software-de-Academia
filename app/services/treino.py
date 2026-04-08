@@ -112,3 +112,40 @@ def buscar_treino(treino_id: int, db: Session) -> Treino:
     if not treino:
         raise HTTPException(status_code=404, detail="Treino não encontrado")
     return treino
+
+
+def atualizar_treino(treino_id: int, data: dict, novos_exercicios: list, db: Session) -> Treino:
+    treino = buscar_treino(treino_id, db)
+    for k, v in data.items():
+        setattr(treino, k, v)
+
+    if novos_exercicios is not None:
+        # Substitui todos os exercícios
+        db.query(TreinoExercicio).filter(TreinoExercicio.treino_id == treino_id).delete()
+        for i, ex_data in enumerate(novos_exercicios, start=1):
+            exercicio = db.query(Exercicio).filter(Exercicio.id == ex_data["exercicio_id"]).first()
+            if not exercicio:
+                raise HTTPException(status_code=404, detail=f"Exercício {ex_data['exercicio_id']} não encontrado")
+            item = TreinoExercicio(
+                treino_id=treino_id,
+                exercicio_id=ex_data["exercicio_id"],
+                series=ex_data.get("series", 3),
+                repeticoes=ex_data.get("repeticoes", 12),
+                carga_kg=ex_data.get("carga_kg"),
+                descanso_segundos=ex_data.get("descanso_segundos", 60),
+                observacoes=ex_data.get("observacoes"),
+                ordem=ex_data.get("ordem", i),
+            )
+            db.add(item)
+
+    db.commit()
+    db.refresh(treino)
+    return treino
+
+
+def desativar_treino(treino_id: int, db: Session) -> Treino:
+    treino = buscar_treino(treino_id, db)
+    treino.ativo = False
+    db.commit()
+    db.refresh(treino)
+    return treino

@@ -4,57 +4,333 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>{% block title %}Academia System{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"/>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"/>
   <style>
-    body { background: #f4f6fa; }
-    .sidebar { min-height: 100vh; background: #1a1a2e; color: #e0e0e0; width: 240px; }
-    .sidebar .nav-link { color: #adb5bd; }
-    .sidebar .nav-link:hover, .sidebar .nav-link.active { color: #fff; background: rgba(255,255,255,0.08); border-radius: 6px; }
-    .sidebar .brand { font-size: 1.3rem; font-weight: 700; color: #fff; padding: 1.5rem 1rem 1rem; }
-    .main-content { flex: 1; padding: 2rem; }
-    .card { border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.07); border-radius: 12px; }
-    .stat-card { border-left: 4px solid; }
+    :root {
+      --sidebar-bg: #0f172a;
+      --sidebar-width: 252px;
+      --header-height: 64px;
+      --brand-color: #6366f1;
+      --surface: #ffffff;
+      --bg: #f1f5f9;
+      --border: #e2e8f0;
+      --text-muted: #64748b;
+      --radius: 14px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.05);
+    }
+    * { font-family: 'Inter', sans-serif; }
+    body { background: var(--bg); min-height: 100vh; }
+
+    /* ── Sidebar ────────────────────────────── */
+    .sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0;
+      width: var(--sidebar-width);
+      background: var(--sidebar-bg);
+      display: flex; flex-direction: column;
+      z-index: 100; overflow-y: auto;
+    }
+    .sidebar-brand {
+      display: flex; align-items: center; gap: 10px;
+      padding: 22px 20px 16px;
+      color: #fff; font-size: 1.15rem; font-weight: 700;
+      text-decoration: none;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .sidebar-brand .brand-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: var(--brand-color);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem; color: #fff;
+    }
+    .sidebar-section {
+      padding: 12px 12px 4px;
+      font-size: 0.68rem; font-weight: 600; letter-spacing: .08em;
+      color: #475569; text-transform: uppercase;
+    }
+    .sidebar .nav-link {
+      color: #94a3b8;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.875rem; font-weight: 500;
+      display: flex; align-items: center; gap: 10px;
+      transition: all .15s;
+      margin: 1px 0;
+    }
+    .sidebar .nav-link i { font-size: 1rem; flex-shrink: 0; }
+    .sidebar .nav-link:hover { color: #fff; background: rgba(255,255,255,0.06); }
+    .sidebar .nav-link.active {
+      color: #fff; background: var(--brand-color);
+      box-shadow: 0 2px 8px rgba(99,102,241,0.4);
+    }
+    .sidebar-footer {
+      margin-top: auto;
+      padding: 12px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .sidebar-footer .nav-link { color: #94a3b8; }
+    .sidebar-footer .nav-link:hover { color: #f87171; background: rgba(248,113,113,0.1); }
+
+    /* ── Main Layout ───────────────────────── */
+    .layout-main {
+      margin-left: var(--sidebar-width);
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+    .topbar {
+      height: var(--header-height);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 28px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 50;
+    }
+    .topbar-title { font-size: 1rem; font-weight: 600; color: #1e293b; }
+    .page-body { padding: 28px; flex: 1; }
+
+    /* ── Cards ──────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border) !important;
+      border-radius: var(--radius) !important;
+      box-shadow: var(--shadow);
+    }
+    .card-header {
+      background: transparent;
+      border-bottom: 1px solid var(--border);
+      padding: 14px 20px;
+      font-weight: 600; font-size: .9rem; color: #1e293b;
+      border-radius: var(--radius) var(--radius) 0 0 !important;
+    }
+    .card-header .card-actions { margin-left: auto; }
+
+    /* Stat Cards */
+    .stat-card {
+      border-radius: var(--radius) !important;
+      padding: 20px 22px;
+      position: relative; overflow: hidden;
+    }
+    .stat-card .stat-icon {
+      width: 44px; height: 44px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.25rem; flex-shrink: 0;
+    }
+    .stat-card .stat-value { font-size: 1.65rem; font-weight: 700; line-height: 1.1; }
+    .stat-card .stat-label { font-size: 0.78rem; color: var(--text-muted); font-weight: 500; margin-top: 4px; }
+    .stat-card::after {
+      content: ''; position: absolute;
+      right: -20px; top: -20px;
+      width: 90px; height: 90px; border-radius: 50%;
+      opacity: .06;
+    }
+    .stat-primary .stat-icon { background: #ede9fe; color: #6366f1; }
+    .stat-primary .stat-value { color: #6366f1; }
+    .stat-primary::after { background: #6366f1; }
+    .stat-success .stat-icon { background: #dcfce7; color: #16a34a; }
+    .stat-success .stat-value { color: #16a34a; }
+    .stat-success::after { background: #16a34a; }
+    .stat-danger .stat-icon { background: #fee2e2; color: #dc2626; }
+    .stat-danger .stat-value { color: #dc2626; }
+    .stat-danger::after { background: #dc2626; }
+    .stat-warning .stat-icon { background: #fef9c3; color: #ca8a04; }
+    .stat-warning .stat-value { color: #ca8a04; }
+    .stat-warning::after { background: #ca8a04; }
+    .stat-info .stat-icon { background: #e0f2fe; color: #0284c7; }
+    .stat-info .stat-value { color: #0284c7; }
+    .stat-info::after { background: #0284c7; }
+    .stat-secondary .stat-icon { background: #f1f5f9; color: #64748b; }
+    .stat-secondary .stat-value { color: #475569; }
+
+    /* Item Cards (alunos, funcionários, etc.) */
+    .item-card {
+      border-radius: var(--radius) !important;
+      padding: 18px 20px;
+      transition: transform .15s, box-shadow .15s;
+      cursor: pointer;
+    }
+    .item-card:hover { transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.1) !important; }
+    .item-card .avatar {
+      width: 42px; height: 42px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem; font-weight: 700; flex-shrink: 0;
+    }
+
+    /* ── Tabla dentro de cards ──────────────── */
+    .table-card .table { margin-bottom: 0; }
+    .table-card .table thead th {
+      font-size: .75rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .05em; color: var(--text-muted);
+      background: #f8fafc; border-color: var(--border);
+      padding: 10px 16px;
+    }
+    .table-card .table tbody td {
+      padding: 12px 16px; border-color: #f1f5f9;
+      vertical-align: middle; color: #334155;
+    }
+    .table-card .table tbody tr:hover { background: #f8fafc; }
+
+    /* ── Badges ─────────────────────────────── */
+    .badge { font-weight: 600; letter-spacing: .02em; padding: .35em .7em; }
+    .badge-pill { border-radius: 50px; }
+
+    /* ── Buttons ─────────────────────────────── */
+    .btn { font-weight: 500; font-size: .875rem; border-radius: 8px; }
+    .btn-sm { font-size: .8rem; padding: .3rem .7rem; }
+    .btn-primary { background: var(--brand-color); border-color: var(--brand-color); }
+    .btn-primary:hover { background: #4f46e5; border-color: #4f46e5; }
+
+    /* ── Forms ───────────────────────────────── */
+    .form-control, .form-select {
+      border-color: var(--border); border-radius: 8px;
+      font-size: .875rem; color: #334155;
+    }
+    .form-control:focus, .form-select:focus {
+      border-color: var(--brand-color);
+      box-shadow: 0 0 0 3px rgba(99,102,241,.12);
+    }
+    .form-label { font-size: .82rem; font-weight: 600; color: #475569; margin-bottom: 5px; }
+    .input-group-text { background: #f8fafc; border-color: var(--border); }
+
+    /* ── Modais ──────────────────────────────── */
+    .modal-content { border: none !important; border-radius: 16px !important; }
+    .modal-header { border-bottom: 1px solid var(--border); padding: 18px 22px; }
+    .modal-header .modal-title { font-size: .95rem; font-weight: 700; }
+    .modal-body { padding: 22px; }
+    .modal-footer { border-top: 1px solid var(--border); padding: 14px 22px; }
+
+    /* ── Alerts ──────────────────────────────── */
+    .alert { border: none; border-radius: 10px; font-size: .875rem; }
+
+    /* ── Tabs ────────────────────────────────── */
+    .nav-tabs { border-bottom: 2px solid var(--border); }
+    .nav-tabs .nav-link {
+      border: none; color: var(--text-muted);
+      font-size: .875rem; font-weight: 500;
+      padding: 10px 16px; border-radius: 0;
+      border-bottom: 2px solid transparent; margin-bottom: -2px;
+    }
+    .nav-tabs .nav-link.active { color: var(--brand-color); border-bottom-color: var(--brand-color); background: none; }
+    .nav-tabs .nav-link:hover { color: #1e293b; }
+
+    /* ── Section Header ─────────────────────── */
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 22px;
+    }
+    .section-header h4, .section-header h5 {
+      margin: 0; font-weight: 700; font-size: 1.1rem; color: #1e293b;
+    }
+    .section-header .section-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; margin-right: 10px; flex-shrink: 0;
+    }
+
+    /* ── Semana Tags ─────────────────────────── */
+    .week-day-badge {
+      background: linear-gradient(135deg, var(--brand-color), #818cf8);
+      color: #fff; font-size: .7rem; font-weight: 700; letter-spacing: .05em;
+      padding: 3px 10px; border-radius: 6px; text-transform: uppercase;
+    }
+
+    /* ── Empty State ─────────────────────────── */
+    .empty-state { text-align: center; padding: 52px 20px; color: var(--text-muted); }
+    .empty-state i { font-size: 3rem; opacity: .3; margin-bottom: 12px; display: block; }
+    .empty-state p { margin: 0; font-size: .9rem; }
+
+    /* ── Scroll ───────────────────────────────── */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
   </style>
   {% block extra_head %}{% endblock %}
 </head>
 <body>
-<div class="d-flex">
-  {% if request.cookies.get('access_token') %}
-  <nav class="sidebar d-flex flex-column p-3">
-    <div class="brand"><i class="bi bi-activity"></i> AcademiaSys</div>
-    <hr style="border-color:#333"/>
-    <ul class="nav flex-column gap-1">
-      <li class="nav-item"><a class="nav-link" href="/dashboard"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a></li>
-      <li class="nav-item"><a class="nav-link" href="/alunos"><i class="bi bi-people me-2"></i>Alunos</a></li>
-      <li class="nav-item"><a class="nav-link" href="/matriculas"><i class="bi bi-card-checklist me-2"></i>Matrículas</a></li>
-      <li class="nav-item"><a class="nav-link" href="/pagamentos"><i class="bi bi-cash-coin me-2"></i>Pagamentos</a></li>
-      <li class="nav-item"><a class="nav-link" href="/presencas"><i class="bi bi-check2-square me-2"></i>Check-in</a></li>
-      <li class="nav-item"><a class="nav-link" href="/treinos"><i class="bi bi-lightning me-2"></i>Treinos</a></li>
-      <li class="nav-item"><a class="nav-link" href="/avaliacoes"><i class="bi bi-clipboard2-pulse me-2"></i>Avaliações</a></li>
-      <li class="nav-item"><a class="nav-link" href="/aulas"><i class="bi bi-calendar3 me-2"></i>Aulas</a></li>
-      <li class="nav-item"><a class="nav-link" href="/planos"><i class="bi bi-tag me-2"></i>Planos</a></li>
-      <li class="nav-item"><a class="nav-link" href="/funcionarios"><i class="bi bi-person-badge me-2"></i>Funcionários</a></li>
-    </ul>
-    <div class="mt-auto">
-      <hr style="border-color:#333"/>
-      <a class="nav-link text-danger" href="/auth/logout"><i class="bi bi-box-arrow-left me-2"></i>Sair</a>
-    </div>
-  </nav>
-  {% endif %}
 
-  <div class="main-content w-100">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% for category, message in messages %}
-        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-          {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-      {% endfor %}
-    {% endwith %}
+{% if request.cookies.get('access_token') %}
+<!-- ── Sidebar ─────────────────────────────────── -->
+<aside class="sidebar">
+  <a href="/dashboard" class="sidebar-brand">
+    <div class="brand-icon"><i class="bi bi-activity"></i></div>
+    AcademiaSys
+  </a>
+
+  <div class="px-3 py-2">
+    <div class="sidebar-section">Principal</div>
+    <ul class="nav flex-column">
+      <li class="nav-item"><a class="nav-link {% if request.url.path == '/dashboard' %}active{% endif %}" href="/dashboard"><i class="bi bi-speedometer2"></i>Dashboard</a></li>
+    </ul>
+
+    <div class="sidebar-section mt-2">Alunos</div>
+    <ul class="nav flex-column">
+      <li class="nav-item"><a class="nav-link {% if '/alunos' in request.url.path %}active{% endif %}" href="/alunos"><i class="bi bi-people"></i>Alunos</a></li>
+      <li class="nav-item"><a class="nav-link {% if '/checkin' in request.url.path %}active{% endif %}" href="/checkin"><i class="bi bi-check2-square"></i>Check-in</a></li>
+      <li class="nav-item"><a class="nav-link {% if '/matriculas' in request.url.path %}active{% endif %}" href="/matriculas"><i class="bi bi-card-checklist"></i>Matrículas</a></li>
+      <li class="nav-item"><a class="nav-link {% if '/inadimplentes' in request.url.path %}active{% endif %}" href="/inadimplentes"><i class="bi bi-exclamation-triangle"></i>Inadimplentes</a></li>
+    </ul>
+
+    <div class="sidebar-section mt-2">Treino</div>
+    <ul class="nav flex-column">
+      <li class="nav-item"><a class="nav-link {% if '/treinos' in request.url.path %}active{% endif %}" href="/treinos"><i class="bi bi-lightning-charge"></i>Treinos</a></li>
+      <li class="nav-item"><a class="nav-link {% if '/exercicios' in request.url.path %}active{% endif %}" href="/exercicios"><i class="bi bi-journal-bookmark"></i>Exercícios</a></li>
+      <li class="nav-item"><a class="nav-link {% if '/avaliacoes' in request.url.path %}active{% endif %}" href="/avaliacoes"><i class="bi bi-clipboard2-pulse"></i>Avaliações</a></li>
+      <li class="nav-item"><a class="nav-link {% if '/aulas' in request.url.path %}active{% endif %}" href="/aulas"><i class="bi bi-calendar3"></i>Aulas</a></li>
+    </ul>
+
+    <div class="sidebar-section mt-2">Gestão</div>
+    <ul class="nav flex-column">
+      <li class="nav-item"><a class="nav-link {% if '/planos' in request.url.path %}active{% endif %}" href="/planos"><i class="bi bi-tag"></i>Planos</a></li>
+      <li class="nav-item"><a class="nav-link {% if '/funcionarios' in request.url.path %}active{% endif %}" href="/funcionarios"><i class="bi bi-person-badge"></i>Funcionários</a></li>
+      <li class="nav-item"><a class="nav-link {% if '/relatorios' in request.url.path %}active{% endif %}" href="/relatorios"><i class="bi bi-bar-chart-line"></i>Relatórios</a></li>
+      <li class="nav-item"><a class="nav-link {% if '/configuracoes' in request.url.path %}active{% endif %}" href="/configuracoes"><i class="bi bi-gear"></i>Configurações</a></li>
+    </ul>
+  </div>
+
+  <div class="sidebar-footer">
+    <a class="nav-link {% if '/perfil' in request.url.path %}active{% endif %}" href="/perfil"><i class="bi bi-person-circle"></i>Meu Perfil</a>
+    <a class="nav-link" href="/auth/logout"><i class="bi bi-box-arrow-left"></i>Sair</a>
+  </div>
+</aside>
+
+<!-- ── Main ──────────────────────────────────── -->
+<div class="layout-main">
+  <header class="topbar">
+    <span class="topbar-title">{% block page_title %}{% endblock %}</span>
+    <div class="d-flex align-items-center gap-2">
+      {% block topbar_actions %}{% endblock %}
+    </div>
+  </header>
+
+  <main class="page-body">
+    {% if success %}
+    <div class="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2 mb-4" role="alert">
+      <i class="bi bi-check-circle-fill fs-5"></i>
+      <span>{{ success }}</span>
+      <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+    {% if error %}
+    <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2 mb-4" role="alert">
+      <i class="bi bi-exclamation-circle-fill fs-5"></i>
+      <span>{{ error }}</span>
+      <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
 
     {% block content %}{% endblock %}
-  </div>
+  </main>
 </div>
+
+{% else %}
+<!-- Sem sidebar (login) -->
+<div class="w-100">
+  {{ self.content() }}
+</div>
+{% endif %}
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 {% block extra_scripts %}{% endblock %}
 </body>

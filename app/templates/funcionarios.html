@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Funcionários{% endblock %}
+{% block page_title %}<i class="bi bi-person-badge me-2" style="color:#6366f1;"></i>Funcionários{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoFunc">
+    <i class="bi bi-plus-lg me-1"></i>Novo Funcionário
+  </button>
+{% endblock %}
+
+{% block content %}
+{% if funcionarios %}
+<div class="row g-3">
+  {% for f in funcionarios %}
+  <div class="col-sm-6 col-xl-4 {% if not f.ativo %}" style="opacity:.65;"{% endif %}>
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="d-flex align-items-start gap-3 mb-3">
+          <!-- avatar inicial -->
+          <div style="width:46px;height:46px;border-radius:50%;display:flex;align-items:center;
+                      justify-content:center;font-weight:700;font-size:1.1rem;flex-shrink:0;
+                      {% if f.role.value == 'admin' %}background:#fee2e2;color:#dc2626;
+                      {% elif f.role.value == 'professor' %}background:#e0f2fe;color:#0284c7;
+                      {% else %}background:#f1f5f9;color:#64748b;{% endif %}">
+            {{ f.nome[0].upper() }}
+          </div>
+          <div class="flex-grow-1">
+            <div class="fw-semibold" style="color:#1e293b;">{{ f.nome }}</div>
+            <div class="text-muted" style="font-size:.76rem;">{{ f.email }}</div>
+          </div>
+          <!-- role badge -->
+          {% if f.role.value == 'admin' %}
+            <span class="badge" style="background:#fee2e2;color:#991b1b;">Admin</span>
+          {% elif f.role.value == 'professor' %}
+            <span class="badge" style="background:#e0f2fe;color:#0369a1;">Professor</span>
+          {% else %}
+            <span class="badge" style="background:#f1f5f9;color:#475569;">Recepcionista</span>
+          {% endif %}
+        </div>
+        <div class="d-flex flex-column gap-1 mb-3" style="font-size:.78rem;color:#64748b;">
+          {% if f.cpf %}
+          <span><i class="bi bi-credit-card me-1"></i>{{ f.cpf }}</span>
+          {% endif %}
+          {% if f.telefone %}
+          <span><i class="bi bi-telephone me-1"></i>{{ f.telefone }}</span>
+          {% endif %}
+          <span>
+            {% if f.ativo %}
+              <i class="bi bi-check-circle me-1" style="color:#16a34a;"></i>
+              <span style="color:#16a34a;">Ativo</span>
+            {% else %}
+              <i class="bi bi-x-circle me-1" style="color:#94a3b8;"></i>
+              <span style="color:#94a3b8;">Inativo</span>
+            {% endif %}
+          </span>
+        </div>
+        <button class="btn btn-sm btn-outline-secondary w-100"
+                data-bs-toggle="modal" data-bs-target="#modalEditarFunc"
+                data-id="{{ f.id }}" data-nome="{{ f.nome }}"
+                data-telefone="{{ f.telefone or '' }}"
+                data-role="{{ f.role.value }}"
+                data-ativo="{{ f.ativo }}">
+          <i class="bi bi-pencil me-1"></i>Editar
+        </button>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <i class="bi bi-person-badge"></i>
+    <p>Nenhum funcionário cadastrado.</p>
+    <button class="btn btn-primary btn-sm mt-2" data-bs-toggle="modal" data-bs-target="#modalNovoFunc">
+      <i class="bi bi-plus me-1"></i>Adicionar funcionário
+    </button>
+  </div>
+</div>
+{% endif %}
+
+<!-- Modal Novo Funcionário -->
+<div class="modal fade" id="modalNovoFunc" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Novo Funcionário</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <form method="post" action="/funcionarios">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12"><label class="form-label">Nome *</label><input type="text" name="nome" class="form-control" required/></div>
+            <div class="col-md-6"><label class="form-label">E-mail *</label><input type="email" name="email" class="form-control" required/></div>
+            <div class="col-md-6"><label class="form-label">Senha *</label><input type="password" name="password" class="form-control" required minlength="6"/></div>
+            <div class="col-md-6"><label class="form-label">CPF</label><input type="text" name="cpf" class="form-control"/></div>
+            <div class="col-md-6"><label class="form-label">Telefone</label><input type="text" name="telefone" class="form-control"/></div>
+            <div class="col-md-6">
+              <label class="form-label">Função *</label>
+              <select name="role" class="form-select" required>
+                <option value="recepcionista">Recepcionista</option>
+                <option value="professor">Professor</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Editar Funcionário -->
+<div class="modal fade" id="modalEditarFunc" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Editar Funcionário</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <form method="post" action="/funcionarios/editar">
+        <input type="hidden" name="func_id" id="editFuncId"/>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12"><label class="form-label">Nome *</label><input type="text" name="nome" id="editFuncNome" class="form-control" required/></div>
+            <div class="col-md-6"><label class="form-label">Telefone</label><input type="text" name="telefone" id="editFuncTelefone" class="form-control"/></div>
+            <div class="col-md-6">
+              <label class="form-label">Função</label>
+              <select name="role" id="editFuncRole" class="form-select">
+                <option value="recepcionista">Recepcionista</option>
+                <option value="professor">Professor</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Status</label>
+              <select name="ativo" id="editFuncAtivo" class="form-select">
+                <option value="1">Ativo</option>
+                <option value="0">Inativo</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+document.getElementById('modalEditarFunc').addEventListener('show.bs.modal', function(e) {
+  const btn = e.relatedTarget;
+  document.getElementById('editFuncId').value = btn.dataset.id;
+  document.getElementById('editFuncNome').value = btn.dataset.nome;
+  document.getElementById('editFuncTelefone').value = btn.dataset.telefone;
+  document.getElementById('editFuncRole').value = btn.dataset.role;
+  document.getElementById('editFuncAtivo').value = btn.dataset.ativo === 'True' ? '1' : '0';
+});
+</script>
+{% endblock %}

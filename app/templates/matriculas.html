@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Matrículas e Pagamentos{% endblock %}
+{% block page_title %}<i class="bi bi-card-checklist me-2" style="color:#6366f1;"></i>Matrículas e Pagamentos{% endblock %}
+
+{% block content %}
+<!-- Filtros -->
+<div class="card mb-4">
+  <div class="card-body py-3 px-4">
+    <form method="get" class="d-flex flex-wrap gap-2 align-items-end">
+      <div>
+        <label class="form-label mb-1">Aluno</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-search text-muted"></i></span>
+          <input type="text" name="busca" class="form-control" placeholder="Nome..." value="{{ busca or '' }}"/>
+        </div>
+      </div>
+      <div>
+        <label class="form-label mb-1">Status</label>
+        <select name="status" class="form-select">
+          <option value="">Todos</option>
+          <option value="ativa" {% if status_filtro == 'ativa' %}selected{% endif %}>Ativa</option>
+          <option value="vencida" {% if status_filtro == 'vencida' %}selected{% endif %}>Vencida</option>
+          <option value="cancelada" {% if status_filtro == 'cancelada' %}selected{% endif %}>Cancelada</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-outline-primary btn-sm">Filtrar</button>
+      {% if busca or status_filtro %}<a href="/matriculas" class="btn btn-outline-secondary btn-sm">Limpar</a>{% endif %}
+    </form>
+  </div>
+</div>
+
+<div class="card table-card">
+  <table class="table">
+    <thead>
+      <tr><th>Aluno</th><th>Plano</th><th>Início</th><th>Vencimento</th><th>Status</th><th>Pagamento</th><th>Ações</th></tr>
+    </thead>
+    <tbody>
+      {% for row in matriculas %}
+      <tr>
+        <td>
+          <a href="/alunos/{{ row.matricula.aluno_id }}" class="fw-semibold text-decoration-none" style="color:#1e293b;">{{ row.aluno_nome }}</a>
+        </td>
+        <td style="color:#64748b;">{{ row.matricula.plano.nome }}</td>
+        <td style="color:#64748b;">{{ row.matricula.data_inicio.strftime("%d/%m/%Y") }}</td>
+        <td>
+          {% if row.matricula.data_vencimento < hoje and row.matricula.status.value == 'ativa' %}
+            <span style="color:#dc2626;font-weight:600;">{{ row.matricula.data_vencimento.strftime("%d/%m/%Y") }}</span>
+          {% else %}
+            {{ row.matricula.data_vencimento.strftime("%d/%m/%Y") }}
+          {% endif %}
+        </td>
+        <td>
+          {% if row.matricula.status.value == 'ativa' %}
+            <span class="badge" style="background:#dcfce7;color:#166534;">Ativa</span>
+          {% elif row.matricula.status.value == 'vencida' %}
+            <span class="badge" style="background:#fee2e2;color:#991b1b;">Vencida</span>
+          {% else %}
+            <span class="badge bg-secondary">{{ row.matricula.status.value }}</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if row.ultimo_pag %}
+            {% if row.ultimo_pag.status.value == 'pago' %}
+              <span class="badge" style="background:#dcfce7;color:#166534;">
+                <i class="bi bi-check-circle me-1"></i>Pago {{ row.ultimo_pag.data_pagamento.strftime("%d/%m") }}
+              </span>
+            {% else %}
+              <span class="badge" style="background:#fef9c3;color:#92400e;">
+                <i class="bi bi-clock me-1"></i>Vence {{ row.ultimo_pag.data_vencimento.strftime("%d/%m") }}
+              </span>
+            {% endif %}
+          {% else %}<span class="text-muted">—</span>{% endif %}
+        </td>
+        <td>
+          <div class="d-flex gap-1">
+            {% if row.ultimo_pag and row.ultimo_pag.status.value == 'pendente' %}
+            <button class="btn btn-sm" style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;"
+                    data-bs-toggle="modal" data-bs-target="#modalPagar"
+                    data-pagid="{{ row.ultimo_pag.id }}" title="Registrar pagamento">
+              <i class="bi bi-cash"></i>
+            </button>
+            {% endif %}
+            <form method="post" action="/matriculas/{{ row.matricula.id }}/renovar" class="d-inline">
+              <button type="submit" class="btn btn-sm btn-outline-primary" title="Renovar matrícula">
+                <i class="bi bi-arrow-clockwise"></i>
+              </button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7">
+        <div class="empty-state">
+          <i class="bi bi-card-checklist"></i>
+          <p>Nenhuma matrícula encontrada</p>
+        </div>
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Modal Registrar Pagamento -->
+<div class="modal fade" id="modalPagar" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Registrar Pagamento</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <form method="post" action="/pagamentos/pagar">
+        <input type="hidden" name="pagamento_id" id="inputPagId"/>
+        <input type="hidden" name="redirect_url" value="/matriculas"/>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Método *</label>
+            <select name="metodo" class="form-select" required>
+              <option value="dinheiro">Dinheiro</option>
+              <option value="pix">PIX</option>
+              <option value="cartao_credito">Cartão de Crédito</option>
+              <option value="cartao_debito">Cartão de Débito</option>
+              <option value="transferencia">Transferência</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Data do Pagamento</label>
+            <input type="date" name="data_pagamento" class="form-control" value="{{ hoje }}"/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Observações</label>
+            <textarea name="observacoes" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success">Confirmar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+document.getElementById('modalPagar').addEventListener('show.bs.modal', function(e) {
+  const btn = e.relatedTarget;
+  if (btn) document.getElementById('inputPagId').value = btn.dataset.pagid;
+});
+</script>
+{% endblock %}

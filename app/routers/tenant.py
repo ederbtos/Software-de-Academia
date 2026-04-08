@@ -73,8 +73,7 @@ def criar_matricula(data: MatriculaCreate, db: Session = Depends(get_tenant_sess
 
 @router.get("/pagamentos/inadimplentes")
 def inadimplentes(db: Session = Depends(get_tenant_session), _=Depends(get_current_funcionario)):
-    rows = svc_relatorio.relatorio_inadimplentes(db)
-    return [{"aluno": r[0].nome, "vencimento": r[1].data_vencimento, "valor": float(r[1].valor)} for r in rows]
+    return svc_relatorio.relatorio_inadimplentes(db)
 
 
 @router.patch("/pagamentos/{pagamento_id}/pagar", response_model=PagamentoOut)

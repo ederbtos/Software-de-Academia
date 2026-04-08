@@ -46,6 +46,56 @@ def criar_academia(data: AcademiaCreate, db: Session) -> Academia:
     return academia
 
 
+_EXERCICIOS_PADRAO = [
+    # Peito
+    ("Supino Reto com Barra", "peito"),
+    ("Supino Inclinado com Halteres", "peito"),
+    ("Crucifixo", "peito"),
+    ("Peck Deck", "peito"),
+    ("Flexão de Braço", "peito"),
+    # Costas
+    ("Puxada Frontal", "costas"),
+    ("Remada Curvada", "costas"),
+    ("Remada Unilateral", "costas"),
+    ("Pullover", "costas"),
+    ("Barra Fixa", "costas"),
+    # Pernas
+    ("Agachamento Livre", "pernas"),
+    ("Leg Press 45°", "pernas"),
+    ("Extensora", "pernas"),
+    ("Flexora Deitado", "pernas"),
+    ("Cadeira Adutora", "pernas"),
+    ("Panturrilha em Pé", "pernas"),
+    ("Avanço", "pernas"),
+    # Ombros
+    ("Desenvolvimento com Halteres", "ombros"),
+    ("Elevação Lateral", "ombros"),
+    ("Elevação Frontal", "ombros"),
+    ("Remada Alta", "ombros"),
+    ("Encolhimento de Ombros", "ombros"),
+    # Bíceps
+    ("Rosca Direta com Barra", "bíceps"),
+    ("Rosca Alternada com Halteres", "bíceps"),
+    ("Rosca Martelo", "bíceps"),
+    ("Rosca Concentrada", "bíceps"),
+    # Tríceps
+    ("Tríceps Pulley", "tríceps"),
+    ("Tríceps Testa", "tríceps"),
+    ("Tríceps Coice", "tríceps"),
+    ("Mergulho no Banco", "tríceps"),
+    # Abdômen
+    ("Abdominal Supra", "abdômen"),
+    ("Abdominal Infra", "abdômen"),
+    ("Prancha Isométrica", "abdômen"),
+    ("Oblíquo", "abdômen"),
+    # Cardio
+    ("Esteira", "cardio"),
+    ("Bicicleta Ergométrica", "cardio"),
+    ("Elíptico", "cardio"),
+    ("Corda Naval", "cardio"),
+]
+
+
 def _provisionar_schema(schema_name: str, db: Session):
     """Cria o schema PostgreSQL e todas as tabelas do tenant."""
     db.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema_name}"'))
@@ -61,6 +111,23 @@ def _provisionar_schema(schema_name: str, db: Session):
         ]
         Base.metadata.create_all(bind=conn, tables=tenant_tables)
         conn.commit()
+
+    # Seed de exercícios padrão
+    _seed_exercicios(schema_name)
+
+
+def _seed_exercicios(schema_name: str):
+    """Insere a lista de exercícios padrão no schema do tenant."""
+    from app.db.database import get_tenant_db
+    tenant_db = next(get_tenant_db(schema_name))
+    try:
+        from app.models.tenant import Exercicio
+        if tenant_db.query(Exercicio).count() == 0:
+            for nome, grupo in _EXERCICIOS_PADRAO:
+                tenant_db.add(Exercicio(nome=nome, grupo_muscular=grupo, ativo=True))
+            tenant_db.commit()
+    finally:
+        tenant_db.close()
 
 
 def atualizar_academia(academia_id: int, data: AcademiaUpdate, db: Session) -> Academia:

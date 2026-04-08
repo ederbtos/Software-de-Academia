@@ -1,51 +1,105 @@
 {% extends "base.html" %}
 {% block title %}Superadmin — Academias{% endblock %}
-{% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h4 class="fw-bold mb-0"><i class="bi bi-building me-2 text-primary"></i>Painel Superadmin — Academias</h4>
-  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovaAcademia">
+{% block page_title %}<i class="bi bi-building me-2" style="color:#6366f1;"></i>Painel Superadmin{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovaAcademia">
     <i class="bi bi-plus-lg me-1"></i>Nova Academia
   </button>
+{% endblock %}
+
+{% block content %}
+
+{% if success %}
+<div class="alert alert-success d-flex align-items-center gap-2 mb-3" style="border-radius:10px;">
+  <i class="bi bi-check-circle-fill"></i><span>{{ success }}</span>
 </div>
+{% endif %}
+{% if error %}
+<div class="alert alert-danger d-flex align-items-center gap-2 mb-3" style="border-radius:10px;">
+  <i class="bi bi-exclamation-circle-fill"></i><span>{{ error }}</span>
+</div>
+{% endif %}
 
-{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
-{% if success %}<div class="alert alert-success">{{ success }}</div>{% endif %}
-
+{% if academias %}
+<div class="row g-3">
+  {% for a in academias %}
+  <div class="col-sm-6 col-xl-4">
+    <div class="card h-100">
+      <div class="card-body d-flex flex-column">
+        <!-- header -->
+        <div class="d-flex align-items-start gap-3 mb-3">
+          <div style="width:46px;height:46px;border-radius:12px;background:#ede9fe;
+                      display:flex;align-items:center;justify-content:center;
+                      font-size:1.2rem;flex-shrink:0;">
+            <i class="bi bi-building" style="color:#6366f1;"></i>
+          </div>
+          <div class="flex-grow-1">
+            <div class="fw-semibold" style="color:#1e293b;font-size:.95rem;">{{ a.nome }}</div>
+            <div style="font-size:.72rem;font-family:monospace;color:#6366f1;
+                        background:#ede9fe;padding:1px 6px;border-radius:4px;
+                        display:inline-block;margin-top:2px;">{{ a.slug }}</div>
+          </div>
+          {% if a.status.value == 'ativa' %}
+            <span class="badge" style="background:#dcfce7;color:#166534;">Ativa</span>
+          {% elif a.status.value == 'suspensa' %}
+            <span class="badge" style="background:#fef9c3;color:#92400e;">Suspensa</span>
+          {% else %}
+            <span class="badge" style="background:#f1f5f9;color:#64748b;">Inativa</span>
+          {% endif %}
+        </div>
+        <!-- detalhes -->
+        <div class="d-flex flex-column gap-1 mb-3" style="font-size:.77rem;color:#64748b;">
+          {% if a.cnpj %}<span><i class="bi bi-card-list me-1"></i>{{ a.cnpj }}</span>{% endif %}
+          {% if a.telefone %}<span><i class="bi bi-telephone me-1"></i>{{ a.telefone }}</span>{% endif %}
+          {% if a.email %}<span><i class="bi bi-envelope me-1"></i>{{ a.email }}</span>{% endif %}
+          <span><i class="bi bi-server me-1"></i><code style="font-size:.72rem;">{{ a.schema_name }}</code></span>
+          <span><i class="bi bi-calendar me-1"></i>Criado {{ a.criado_em.strftime("%d/%m/%Y") }}</span>
+        </div>
+        <!-- ações -->
+        <div class="d-flex gap-2 mt-auto">
+          <button class="btn btn-outline-primary btn-sm flex-grow-1"
+                  onclick="abrirEditar({{ a.id }}, '{{ a.nome }}', '{{ a.cnpj or '' }}', '{{ a.telefone or '' }}', '{{ a.email or '' }}', '{{ a.endereco or '' }}')">
+            <i class="bi bi-pencil me-1"></i>Editar
+          </button>
+          {% if a.status.value == 'ativa' %}
+          <form method="post" action="/superadmin/academias/{{ a.id }}/desativar" class="m-0">
+            <button type="submit" class="btn btn-outline-warning btn-sm"
+                    onclick="return confirm('Desativar {{ a.nome }}?')">
+              <i class="bi bi-pause-circle"></i>
+            </button>
+          </form>
+          {% else %}
+          <form method="post" action="/superadmin/academias/{{ a.id }}/ativar" class="m-0">
+            <button type="submit" class="btn btn-outline-success btn-sm"
+                    onclick="return confirm('Ativar {{ a.nome }}?')">
+              <i class="bi bi-play-circle"></i>
+            </button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
 <div class="card">
-  <div class="card-body p-0">
-    <table class="table table-hover mb-0">
-      <thead class="table-light">
-        <tr><th>#</th><th>Nome</th><th>Slug</th><th>CNPJ</th><th>Status</th><th>Schema</th><th>Criado em</th></tr>
-      </thead>
-      <tbody>
-        {% for a in academias %}
-        <tr>
-          <td>{{ a.id }}</td>
-          <td><strong>{{ a.nome }}</strong></td>
-          <td><code>{{ a.slug }}</code></td>
-          <td>{{ a.cnpj or "—" }}</td>
-          <td>
-            {% if a.status.value == "ativa" %}<span class="badge bg-success">Ativa</span>
-            {% elif a.status.value == "suspensa" %}<span class="badge bg-warning text-dark">Suspensa</span>
-            {% else %}<span class="badge bg-secondary">Inativa</span>{% endif %}
-          </td>
-          <td><code>{{ a.schema_name }}</code></td>
-          <td>{{ a.criado_em.strftime("%d/%m/%Y") }}</td>
-        </tr>
-        {% else %}
-        <tr><td colspan="7" class="text-center text-muted py-4">Nenhuma academia cadastrada</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="empty-state">
+    <i class="bi bi-building"></i>
+    <p>Nenhuma academia cadastrada.</p>
+    <button class="btn btn-primary btn-sm mt-2" data-bs-toggle="modal" data-bs-target="#modalNovaAcademia">
+      <i class="bi bi-plus me-1"></i>Criar primeira academia
+    </button>
   </div>
 </div>
+{% endif %}
 
 <!-- Modal Nova Academia -->
 <div class="modal fade" id="modalNovaAcademia" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Nova Academia</h5>
+        <h5 class="modal-title"><i class="bi bi-building-add me-2"></i>Nova Academia</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <form method="post" action="/superadmin/academias/form">
@@ -58,7 +112,7 @@
             <div class="col-md-6">
               <label class="form-label">Slug (subdomínio) *</label>
               <input type="text" name="slug" class="form-control" required placeholder="fitclub"/>
-              <div class="form-text">Apenas letras minúsculas, números e hífens</div>
+              <div class="form-text">Letras minúsculas, números e hífens (3-60 chars)</div>
             </div>
             <div class="col-md-6">
               <label class="form-label">CNPJ</label>
@@ -72,14 +126,88 @@
               <label class="form-label">E-mail</label>
               <input type="email" name="email" class="form-control"/>
             </div>
+            <div class="col-12">
+              <label class="form-label">Endereço</label>
+              <input type="text" name="endereco" class="form-control"/>
+            </div>
+            <div class="col-12"><hr class="my-1"/><p class="text-muted mb-2" style="font-size:.8rem;"><i class="bi bi-person-badge me-1"></i>Administrador inicial (opcional)</p></div>
+            <div class="col-12">
+              <label class="form-label">Nome do Admin</label>
+              <input type="text" name="admin_nome" class="form-control" placeholder="João Silva"/>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">E-mail do Admin</label>
+              <input type="email" name="admin_email" class="form-control"/>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Senha do Admin</label>
+              <input type="password" name="admin_senha" class="form-control" minlength="6"/>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-primary">Criar Academia</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Criar Academia</button>
         </div>
       </form>
     </div>
   </div>
 </div>
+
+<!-- Modal Editar Academia -->
+<div class="modal fade" id="modalEditarAcademia" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Editar Academia</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="formEditar" method="post" action="">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Nome *</label>
+              <input type="text" name="nome" id="editNome" class="form-control" required/>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">CNPJ</label>
+              <input type="text" name="cnpj" id="editCnpj" class="form-control"/>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Telefone</label>
+              <input type="text" name="telefone" id="editTelefone" class="form-control"/>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">E-mail</label>
+              <input type="email" name="email" id="editEmail" class="form-control"/>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Endereço</label>
+              <input type="text" name="endereco" id="editEndereco" class="form-control"/>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function abrirEditar(id, nome, cnpj, telefone, email, endereco) {
+  document.getElementById('formEditar').action = '/superadmin/academias/' + id + '/editar';
+  document.getElementById('editNome').value = nome;
+  document.getElementById('editCnpj').value = cnpj;
+  document.getElementById('editTelefone').value = telefone;
+  document.getElementById('editEmail').value = email;
+  document.getElementById('editEndereco').value = endereco;
+  new bootstrap.Modal(document.getElementById('modalEditarAcademia')).show();
+}
+</script>
 {% endblock %}

@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import datetime, date, time as time_type
 from decimal import Decimal
 from typing import Optional, List
 from pydantic import BaseModel, EmailStr, field_validator
@@ -311,8 +311,8 @@ class AulaOut(BaseModel):
     nome: str
     professor_id: Optional[int]
     dia_semana: DiaSemana
-    horario_inicio: str
-    horario_fim: str
+    horario_inicio: time_type
+    horario_fim: time_type
     capacidade_maxima: int
     ativa: bool
     vagas_disponiveis: Optional[int] = None

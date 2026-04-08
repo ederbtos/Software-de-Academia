@@ -88,6 +88,7 @@ class Aluno(Base):
     avaliacoes = relationship("AvaliacaoFisica", back_populates="aluno")
     treinos = relationship("Treino", back_populates="aluno")
     inscricoes_aulas = relationship("InscricaoAula", back_populates="aluno")
+    notificacoes = relationship("Notificacao", back_populates="aluno")
 
 
 # ---------------------------------------------------------------------------
@@ -323,3 +324,5 @@ class Notificacao(Base):
     status = Column(Enum(NotificacaoStatus), default=NotificacaoStatus.pendente)
     criado_em = Column(DateTime, default=datetime.utcnow)
     enviado_em = Column(DateTime, nullable=True)
+
+    aluno = relationship("Aluno", back_populates="notificacoes")

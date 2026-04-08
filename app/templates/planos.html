@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Planos{% endblock %}
+{% block page_title %}<i class="bi bi-tag me-2" style="color:#6366f1;"></i>Planos{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoPlano">
+    <i class="bi bi-plus-lg me-1"></i>Novo Plano
+  </button>
+{% endblock %}
+
+{% block content %}
+{% if planos %}
+<div class="row g-3">
+  {% for plano in planos %}
+  <div class="col-md-4">
+    <div class="card h-100 {% if not plano.ativo %}" style="opacity:.6;"{% endif %}>
+      <div class="card-body p-4">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-start mb-3">
+          <div style="width:44px;height:44px;border-radius:12px;
+                      background:{% if plano.ativo %}#ede9fe{% else %}#f1f5f9{% endif %};
+                      display:flex;align-items:center;justify-content:center;">
+            <i class="bi bi-tag-fill" style="color:{% if plano.ativo %}#6366f1{% else %}#94a3b8{% endif %};"></i>
+          </div>
+          {% if plano.ativo %}
+            <span class="badge" style="background:#dcfce7;color:#166534;">Ativo</span>
+          {% else %}
+            <span class="badge" style="background:#f1f5f9;color:#64748b;">Inativo</span>
+          {% endif %}
+        </div>
+
+        <h5 class="fw-bold mb-1" style="color:#1e293b;">{{ plano.nome }}</h5>
+        <p class="text-muted mb-3" style="font-size:.82rem;min-height:2rem;">{{ plano.descricao or "Sem descrição" }}</p>
+
+        <div class="mb-1">
+          <span style="font-size:1.8rem;font-weight:700;color:#6366f1;">R$ {{ "%.2f"|format(plano.valor) }}</span>
+        </div>
+        <div class="text-muted" style="font-size:.8rem;">
+          <i class="bi bi-calendar3 me-1"></i>{{ plano.duracao_dias }} dias de vigência
+        </div>
+
+        <!-- Ações -->
+        <div class="d-flex gap-2 mt-4">
+          <button class="btn btn-sm btn-outline-secondary flex-grow-1"
+                  data-bs-toggle="modal" data-bs-target="#modalEditarPlano"
+                  data-id="{{ plano.id }}" data-nome="{{ plano.nome }}"
+                  data-descricao="{{ plano.descricao or '' }}"
+                  data-valor="{{ plano.valor }}" data-dias="{{ plano.duracao_dias }}">
+            <i class="bi bi-pencil me-1"></i>Editar
+          </button>
+          {% if plano.ativo %}
+          <form method="post" action="/planos/{{ plano.id }}/desativar" class="d-inline">
+            <button type="submit" class="btn btn-sm" style="background:#fee2e2;color:#991b1b;border:1px solid #fecaca;">
+              <i class="bi bi-x-circle"></i>
+            </button>
+          </form>
+          {% else %}
+          <form method="post" action="/planos/{{ plano.id }}/ativar" class="d-inline">
+            <button type="submit" class="btn btn-sm" style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;">
+              <i class="bi bi-check-circle"></i>
+            </button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <i class="bi bi-tag"></i>
+    <p>Nenhum plano cadastrado ainda.</p>
+    <button class="btn btn-primary btn-sm mt-2" data-bs-toggle="modal" data-bs-target="#modalNovoPlano">
+      <i class="bi bi-plus me-1"></i>Criar primeiro plano
+    </button>
+  </div>
+</div>
+{% endif %}
+
+<!-- Modal Novo Plano -->
+<div class="modal fade" id="modalNovoPlano" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Novo Plano</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <form method="post" action="/planos">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12"><label class="form-label">Nome *</label><input type="text" name="nome" class="form-control" required/></div>
+            <div class="col-12"><label class="form-label">Descrição</label><textarea name="descricao" class="form-control" rows="2"></textarea></div>
+            <div class="col-md-6"><label class="form-label">Valor (R$) *</label><input type="number" step="0.01" name="valor" class="form-control" required/></div>
+            <div class="col-md-6"><label class="form-label">Duração (dias) *</label><input type="number" name="duracao_dias" class="form-control" value="30" required/></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Editar Plano -->
+<div class="modal fade" id="modalEditarPlano" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Editar Plano</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <form method="post" action="/planos/editar">
+        <input type="hidden" name="plano_id" id="editPlanoId"/>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12"><label class="form-label">Nome *</label><input type="text" name="nome" id="editPlanoNome" class="form-control" required/></div>
+            <div class="col-12"><label class="form-label">Descrição</label><textarea name="descricao" id="editPlanoDesc" class="form-control" rows="2"></textarea></div>
+            <div class="col-md-6"><label class="form-label">Valor (R$) *</label><input type="number" step="0.01" name="valor" id="editPlanoValor" class="form-control" required/></div>
+            <div class="col-md-6"><label class="form-label">Duração (dias) *</label><input type="number" name="duracao_dias" id="editPlanoDias" class="form-control" required/></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+document.getElementById('modalEditarPlano').addEventListener('show.bs.modal', function(e) {
+  const btn = e.relatedTarget;
+  document.getElementById('editPlanoId').value = btn.dataset.id;
+  document.getElementById('editPlanoNome').value = btn.dataset.nome;
+  document.getElementById('editPlanoDesc').value = btn.dataset.descricao;
+  document.getElementById('editPlanoValor').value = btn.dataset.valor;
+  document.getElementById('editPlanoDias').value = btn.dataset.dias;
+});
+</script>
+{% endblock %}

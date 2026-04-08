@@ -69,3 +69,17 @@ class PlanoGlobal(Base):
     valor_mensal = Column(Numeric(10, 2), nullable=False)
     limite_alunos = Column(Integer, nullable=True)  # None = ilimitado
     ativo = Column(Boolean, default=True)
+
+
+class PasswordResetToken(Base):
+    """Tokens de recuperação de senha (público e tenant)."""
+    __tablename__ = "password_reset_tokens"
+    __table_args__ = {"schema": "public"}
+
+    id = Column(Integer, primary_key=True, index=True)
+    token = Column(String(64), unique=True, nullable=False, index=True)
+    email = Column(String(120), nullable=False)
+    schema_name = Column(String(80), nullable=True)  # None = UsuarioPublic
+    usado = Column(Boolean, default=False)
+    expira_em = Column(DateTime, nullable=False)
+    criado_em = Column(DateTime, default=datetime.utcnow)

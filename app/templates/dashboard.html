@@ -1,52 +1,148 @@
 {% extends "base.html" %}
 {% block title %}Dashboard{% endblock %}
-{% block content %}
-<h4 class="fw-bold mb-4"><i class="bi bi-speedometer2 me-2 text-primary"></i>Dashboard</h4>
+{% block page_title %}<i class="bi bi-speedometer2 me-2" style="color:#6366f1;"></i>Dashboard{% endblock %}
 
+{% block content %}
+<!-- Stat Cards -->
 <div class="row g-3 mb-4">
-  <div class="col-md-3">
-    <div class="card p-3 stat-card border-primary">
-      <div class="text-muted small">Alunos Ativos</div>
-      <div class="fs-2 fw-bold text-primary">{{ stats.total_alunos_ativos }}</div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card stat-card stat-primary">
+      <div class="d-flex align-items-center gap-3">
+        <div class="stat-icon"><i class="bi bi-people-fill"></i></div>
+        <div>
+          <div class="stat-value">{{ stats.total_alunos_ativos }}</div>
+          <div class="stat-label">Alunos Ativos</div>
+        </div>
+      </div>
     </div>
   </div>
-  <div class="col-md-3">
-    <div class="card p-3 stat-card border-success">
-      <div class="text-muted small">Check-ins Hoje</div>
-      <div class="fs-2 fw-bold text-success">{{ stats.checkins_hoje }}</div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card stat-card stat-success">
+      <div class="d-flex align-items-center gap-3">
+        <div class="stat-icon"><i class="bi bi-check2-square"></i></div>
+        <div>
+          <div class="stat-value">{{ stats.checkins_hoje }}</div>
+          <div class="stat-label">Check-ins Hoje</div>
+        </div>
+      </div>
     </div>
   </div>
-  <div class="col-md-3">
-    <div class="card p-3 stat-card border-danger">
-      <div class="text-muted small">Mensalidades em Atraso</div>
-      <div class="fs-2 fw-bold text-danger">{{ stats.mensalidades_em_atraso }}</div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card stat-card stat-danger">
+      <div class="d-flex align-items-center gap-3">
+        <div class="stat-icon"><i class="bi bi-exclamation-triangle-fill"></i></div>
+        <div>
+          <div class="stat-value">{{ stats.mensalidades_em_atraso }}</div>
+          <div class="stat-label">Em Atraso</div>
+        </div>
+      </div>
     </div>
   </div>
-  <div class="col-md-3">
-    <div class="card p-3 stat-card border-warning">
-      <div class="text-muted small">Receita do Mês</div>
-      <div class="fs-2 fw-bold text-warning">R$ {{ "%.2f"|format(stats.receita_mes_atual) }}</div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card stat-card stat-warning">
+      <div class="d-flex align-items-center gap-3">
+        <div class="stat-icon"><i class="bi bi-cash-coin"></i></div>
+        <div>
+          <div class="stat-value" style="font-size:1.3rem;">R$&nbsp;{{ "%.0f"|format(stats.receita_mes_atual) }}</div>
+          <div class="stat-label">Receita do Mês</div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
+<!-- Segunda linha -->
+<div class="row g-3 mb-4">
+  <div class="col-sm-4">
+    <div class="card stat-card stat-secondary">
+      <div class="d-flex align-items-center gap-3">
+        <div class="stat-icon"><i class="bi bi-person-dash-fill"></i></div>
+        <div>
+          <div class="stat-value">{{ stats.alunos_sem_treino }}</div>
+          <div class="stat-label">Sem Treino</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-4">
+    <div class="card stat-card stat-info">
+      <div class="d-flex align-items-center gap-3">
+        <div class="stat-icon"><i class="bi bi-clipboard2-pulse"></i></div>
+        <div>
+          <div class="stat-value">{{ stats.avaliacoes_mes_atual }}</div>
+          <div class="stat-label">Avaliações este Mês</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-4">
+    <div class="card stat-card stat-secondary">
+      <div class="d-flex align-items-center gap-3">
+        <div class="stat-icon"><i class="bi bi-person-x-fill"></i></div>
+        <div>
+          <div class="stat-value">{{ stats.total_alunos_inativos }}</div>
+          <div class="stat-label">Alunos Inativos</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Ações rápidas -->
 <div class="row g-3">
-  <div class="col-md-4">
-    <div class="card p-3">
-      <div class="text-muted small">Alunos sem Treino</div>
-      <div class="fs-3 fw-bold text-secondary">{{ stats.alunos_sem_treino }}</div>
-    </div>
-  </div>
-  <div class="col-md-4">
-    <div class="card p-3">
-      <div class="text-muted small">Avaliações este Mês</div>
-      <div class="fs-3 fw-bold text-info">{{ stats.avaliacoes_mes_atual }}</div>
-    </div>
-  </div>
-  <div class="col-md-4">
-    <div class="card p-3">
-      <div class="text-muted small">Alunos Inativos</div>
-      <div class="fs-3 fw-bold text-secondary">{{ stats.total_alunos_inativos }}</div>
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-lightning-charge me-2" style="color:#6366f1;"></i>Ações Rápidas
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-6 col-md-3">
+            <a href="/checkin" class="text-decoration-none">
+              <div class="card border-0 text-center p-3"
+                   style="background:#f0fdf4;border-radius:12px !important;transition:transform .15s;"
+                   onmouseover="this.style.transform='translateY(-3px)'"
+                   onmouseout="this.style.transform='translateY(0)'">
+                <i class="bi bi-check2-square fs-2 mb-2" style="color:#16a34a;"></i>
+                <div class="fw-semibold" style="font-size:.82rem;color:#166534;">Check-in</div>
+              </div>
+            </a>
+          </div>
+          <div class="col-6 col-md-3">
+            <a href="/alunos" class="text-decoration-none">
+              <div class="card border-0 text-center p-3"
+                   style="background:#ede9fe;border-radius:12px !important;transition:transform .15s;"
+                   onmouseover="this.style.transform='translateY(-3px)'"
+                   onmouseout="this.style.transform='translateY(0)'">
+                <i class="bi bi-person-plus-fill fs-2 mb-2" style="color:#6366f1;"></i>
+                <div class="fw-semibold" style="font-size:.82rem;color:#3730a3;">Novo Aluno</div>
+              </div>
+            </a>
+          </div>
+          <div class="col-6 col-md-3">
+            <a href="/inadimplentes" class="text-decoration-none">
+              <div class="card border-0 text-center p-3"
+                   style="background:#fef2f2;border-radius:12px !important;transition:transform .15s;"
+                   onmouseover="this.style.transform='translateY(-3px)'"
+                   onmouseout="this.style.transform='translateY(0)'">
+                <i class="bi bi-exclamation-triangle-fill fs-2 mb-2" style="color:#dc2626;"></i>
+                <div class="fw-semibold" style="font-size:.82rem;color:#991b1b;">Inadimplentes</div>
+              </div>
+            </a>
+          </div>
+          <div class="col-6 col-md-3">
+            <a href="/relatorios" class="text-decoration-none">
+              <div class="card border-0 text-center p-3"
+                   style="background:#fefce8;border-radius:12px !important;transition:transform .15s;"
+                   onmouseover="this.style.transform='translateY(-3px)'"
+                   onmouseout="this.style.transform='translateY(0)'">
+                <i class="bi bi-bar-chart-line-fill fs-2 mb-2" style="color:#ca8a04;"></i>
+                <div class="fw-semibold" style="font-size:.82rem;color:#713f12;">Relatórios</div>
+              </div>
+            </a>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>

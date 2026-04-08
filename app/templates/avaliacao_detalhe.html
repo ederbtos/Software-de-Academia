@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% block title %}Avaliação — {{ avaliacao.data.strftime("%d/%m/%Y") }}{% endblock %}
+{% block page_title %}
+  <a href="/alunos/{{ avaliacao.aluno_id }}" class="btn btn-sm btn-outline-secondary me-2">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <i class="bi bi-clipboard2-pulse me-2" style="color:#0284c7;"></i>
+  Avaliação Física — {{ aluno_nome }}
+{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalEditarAv">
+    <i class="bi bi-pencil me-1"></i>Editar
+  </button>
+  <form method="post" action="/avaliacoes/{{ avaliacao.id }}/deletar" class="m-0"
+        onsubmit="return confirm('Excluir esta avaliação? Esta ação não pode ser desfeita.')">
+    <button type="submit" class="btn btn-outline-danger btn-sm">
+      <i class="bi bi-trash me-1"></i>Excluir
+    </button>
+  </form>
+  <a href="/avaliacoes/nova?aluno_id={{ avaliacao.aluno_id }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus me-1"></i>Nova Avaliação
+  </a>
+{% endblock %}
+
+{% block content %}
+<!-- Cards de métricas principais -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card stat-primary">
+      <div class="stat-icon"><i class="bi bi-calendar"></i></div>
+      <div class="stat-info">
+        <span class="stat-label">Data</span>
+        <span class="stat-value" style="font-size:1rem;">{{ avaliacao.data.strftime("%d/%m/%Y") }}</span>
+      </div>
+    </div>
+  </div>
+  {% if avaliacao.peso_kg %}
+  <div class="col-6 col-md-3">
+    <div class="stat-card stat-info">
+      <div class="stat-icon"><i class="bi bi-speedometer"></i></div>
+      <div class="stat-info">
+        <span class="stat-label">Peso</span>
+        <span class="stat-value">{{ avaliacao.peso_kg }} <small>kg</small></span>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% if avaliacao.altura_cm %}
+  <div class="col-6 col-md-3">
+    <div class="stat-card stat-secondary">
+      <div class="stat-icon"><i class="bi bi-arrows-vertical"></i></div>
+      <div class="stat-info">
+        <span class="stat-label">Altura</span>
+        <span class="stat-value">{{ avaliacao.altura_cm }} <small>cm</small></span>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% if avaliacao.imc %}
+  <div class="col-6 col-md-3">
+    <div class="stat-card
+      {% if avaliacao.imc < 18.5 %}stat-warning
+      {% elif avaliacao.imc < 25 %}stat-success
+      {% elif avaliacao.imc < 30 %}stat-warning
+      {% else %}stat-danger{% endif %}">
+      <div class="stat-icon"><i class="bi bi-activity"></i></div>
+      <div class="stat-info">
+        <span class="stat-label">IMC
+          {% if avaliacao.imc < 18.5 %}— Abaixo
+          {% elif avaliacao.imc < 25 %} — Normal
+          {% elif avaliacao.imc < 30 %} — Sobrepeso
+          {% else %} — Obeso{% endif %}
+        </span>
+        <span class="stat-value">{{ avaliacao.imc }}</span>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="row g-4">
+  <!-- Composição corporal -->
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header">
+        <span class="fw-semibold" style="color:#1e293b;">Composição Corporal</span>
+      </div>
+      <div class="card-body d-flex flex-column gap-3">
+        {% macro metric(label, val, unit) %}
+        {% if val %}
+        <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid #f1f5f9;">
+          <span class="text-muted" style="font-size:.83rem;">{{ label }}</span>
+          <span class="fw-semibold" style="color:#1e293b;">{{ val }} <small style="color:#94a3b8;">{{ unit }}</small></span>
+        </div>
+        {% endif %}
+        {% endmacro %}
+        {{ metric("Gordura", avaliacao.gordura_percent, "%") }}
+        {{ metric("Massa Muscular", avaliacao.massa_muscular_kg, "kg") }}
+        {% if not avaliacao.gordura_percent and not avaliacao.massa_muscular_kg %}
+        <p class="text-muted text-center" style="font-size:.82rem;">Sem dados de composição.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Medidas corporais -->
+  <div class="col-md-8">
+    <div class="card h-100">
+      <div class="card-header">
+        <span class="fw-semibold" style="color:#1e293b;">Medidas Corporais (cm)</span>
+      </div>
+      <div class="card-body">
+        <div class="row g-3" style="font-size:.83rem;">
+          {% set medidas = [
+            ("Tórax", avaliacao.torax),
+            ("Cintura", avaliacao.cintura),
+            ("Quadril", avaliacao.quadril),
+            ("Braço Dir.", avaliacao.braco_dir),
+            ("Braço Esq.", avaliacao.braco_esq),
+            ("Coxa Dir.", avaliacao.coxa_dir),
+            ("Coxa Esq.", avaliacao.coxa_esq),
+            ("Panturrilha Dir.", avaliacao.panturrilha_dir),
+            ("Panturrilha Esq.", avaliacao.panturrilha_esq),
+          ] %}
+          {% set has_medidas = namespace(found=false) %}
+          {% for label, val in medidas %}
+          {% if val %}{% set has_medidas.found = true %}
+          <div class="col-6 col-md-4">
+            <div class="p-2 rounded text-center" style="background:#f8fafc;">
+              <div class="fw-bold" style="color:#1e293b;">{{ val }}</div>
+              <div class="text-muted" style="font-size:.72rem;">{{ label }}</div>
+            </div>
+          </div>
+          {% endif %}
+          {% endfor %}
+          {% if not has_medidas.found %}
+          <div class="col-12 text-muted text-center py-3" style="font-size:.82rem;">
+            Nenhuma medida registrada.
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if avaliacao.observacoes %}
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <span class="fw-semibold" style="color:#1e293b;">Observações</span>
+      </div>
+      <div class="card-body">
+        <p class="mb-0" style="color:#334155;">{{ avaliacao.observacoes }}</p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Modal Editar Avaliação -->
+<div class="modal fade" id="modalEditarAv" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Editar Avaliação</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/avaliacoes/{{ avaliacao.id }}/editar">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">Data *</label>
+              <input type="date" name="data" class="form-control" value="{{ avaliacao.data.isoformat() }}" required/>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Peso (kg)</label>
+              <input type="number" step="0.01" name="peso_kg" class="form-control" value="{{ avaliacao.peso_kg or '' }}"/>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Altura (cm)</label>
+              <input type="number" step="0.1" name="altura_cm" class="form-control" value="{{ avaliacao.altura_cm or '' }}"/>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Gordura (%)</label>
+              <input type="number" step="0.01" name="gordura_percent" class="form-control" value="{{ avaliacao.gordura_percent or '' }}"/>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Massa Muscular (kg)</label>
+              <input type="number" step="0.01" name="massa_muscular_kg" class="form-control" value="{{ avaliacao.massa_muscular_kg or '' }}"/>
+            </div>
+            <div class="col-12"><hr class="my-1"/><p class="text-muted mb-0" style="font-size:.8rem;">Medidas corporais (cm)</p></div>
+            {% for fname, label in [('torax','Tórax'),('cintura','Cintura'),('quadril','Quadril'),
+                                     ('braco_dir','Braço Dir.'),('braco_esq','Braço Esq.'),
+                                     ('coxa_dir','Coxa Dir.'),('coxa_esq','Coxa Esq.'),
+                                     ('panturrilha_dir','Panturrilha Dir.'),('panturrilha_esq','Panturrilha Esq.')] %}
+            <div class="col-6 col-md-4">
+              <label class="form-label">{{ label }}</label>
+              <input type="number" step="0.1" name="{{ fname }}" class="form-control"
+                     value="{{ avaliacao[fname] if avaliacao[fname] is defined else (avaliacao|attr(fname)) or '' }}"/>
+            </div>
+            {% endfor %}
+            <div class="col-12">
+              <label class="form-label">Observações</label>
+              <textarea name="observacoes" class="form-control" rows="2">{{ avaliacao.observacoes or '' }}</textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

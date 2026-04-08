@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Avaliações Físicas{% endblock %}
+{% block page_title %}<i class="bi bi-clipboard2-pulse me-2" style="color:#0284c7;"></i>Avaliações Físicas{% endblock %}
+{% block topbar_actions %}
+  <a href="/avaliacoes/nova" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Nova Avaliação</a>
+{% endblock %}
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- Filtro -->
+<div class="card mb-4">
+  <div class="card-body py-3 px-4">
+    <form method="get" class="d-flex gap-2 align-items-center">
+      <div class="input-group" style="max-width:380px;">
+        <span class="input-group-text"><i class="bi bi-search text-muted"></i></span>
+        <input type="text" name="busca" class="form-control" placeholder="Filtrar por aluno..."
+               value="{{ busca or '' }}"/>
+      </div>
+      <button type="submit" class="btn btn-outline-primary btn-sm">Filtrar</button>
+      {% if busca %}<a href="/avaliacoes" class="btn btn-outline-secondary btn-sm">Limpar</a>{% endif %}
+    </form>
+  </div>
+</div>
+
+{% if avaliacoes %}
+<div class="row g-3">
+  {% for row in avaliacoes %}
+  <div class="col-sm-6 col-xl-4">
+    <a href="/avaliacoes/{{ row.av.id }}" class="text-decoration-none">
+      <div class="card item-card h-100" style="border-left:3px solid #0284c7 !important;">
+        <div class="d-flex align-items-start justify-content-between mb-3">
+          <div>
+            <a href="/alunos/{{ row.av.aluno_id }}" class="fw-semibold text-decoration-none"
+               style="color:#1e293b;" onclick="event.stopPropagation()">
+              {{ row.aluno_nome }}
+            </a>
+            <div class="text-muted" style="font-size:.78rem;">
+              <i class="bi bi-calendar me-1"></i>{{ row.av.data.strftime("%d/%m/%Y") }}
+            </div>
+          </div>
+          {% if row.av.imc %}
+            {% if row.av.imc < 18.5 %}
+              <span class="badge" style="background:#fef9c3;color:#92400e;">Abaixo</span>
+            {% elif row.av.imc < 25 %}
+              <span class="badge" style="background:#dcfce7;color:#166534;">Normal</span>
+            {% elif row.av.imc < 30 %}
+              <span class="badge" style="background:#fef9c3;color:#92400e;">Sobrepeso</span>
+            {% else %}
+              <span class="badge" style="background:#fee2e2;color:#991b1b;">Obeso</span>
+            {% endif %}
+          {% endif %}
+        </div>
+        <div class="row g-2" style="font-size:.82rem;">
+          {% if row.av.peso_kg %}
+          <div class="col-4 text-center p-2 rounded" style="background:#f8fafc;">
+            <div class="fw-bold" style="color:#1e293b;">{{ row.av.peso_kg }}</div>
+            <div class="text-muted" style="font-size:.68rem;">kg</div>
+          </div>
+          {% endif %}
+          {% if row.av.altura_cm %}
+          <div class="col-4 text-center p-2 rounded" style="background:#f8fafc;">
+            <div class="fw-bold" style="color:#1e293b;">{{ row.av.altura_cm }}</div>
+            <div class="text-muted" style="font-size:.68rem;">cm</div>
+          </div>
+          {% endif %}
+          {% if row.av.imc %}
+          <div class="col-4 text-center p-2 rounded" style="background:#f8fafc;">
+            <div class="fw-bold" style="color:#1e293b;">{{ row.av.imc }}</div>
+            <div class="text-muted" style="font-size:.68rem;">IMC</div>
+          </div>
+          {% endif %}
+          {% if row.av.gordura_percent %}
+          <div class="col-6 text-center p-2 rounded" style="background:#f8fafc;">
+            <div class="fw-bold" style="color:#1e293b;">{{ row.av.gordura_percent }}%</div>
+            <div class="text-muted" style="font-size:.68rem;">Gordura</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <i class="bi bi-clipboard2-pulse"></i>
+    <p>Nenhuma avaliação encontrada.</p>
+    <a href="/avaliacoes/nova" class="btn btn-primary btn-sm mt-2">
+      <i class="bi bi-plus me-1"></i>Nova Avaliação
+    </a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

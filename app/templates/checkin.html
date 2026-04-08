@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Check-in{% endblock %}
+{% block page_title %}<i class="bi bi-check2-square me-2" style="color:#16a34a;"></i>Check-in{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <!-- Formulário de busca -->
+  <div class="col-md-5">
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-search me-2" style="color:#6366f1;"></i>Registrar Presença
+      </div>
+      <div class="card-body">
+        <form method="post" action="/checkin">
+          <div class="mb-3">
+            <label class="form-label">Buscar por Nome ou CPF</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-person-search text-muted"></i></span>
+              <input type="text" name="busca" id="inputBusca" class="form-control"
+                     placeholder="Digite nome ou CPF..." autocomplete="off"
+                     value="{{ busca or '' }}"/>
+            </div>
+          </div>
+
+          {% if alunos_encontrados %}
+          <div class="mb-3">
+            <label class="form-label">Selecionar Aluno <span class="text-danger">*</span></label>
+            <select name="aluno_id" class="form-select" required>
+              <option value="">— Selecione —</option>
+              {% for a in alunos_encontrados %}
+              <option value="{{ a.id }}" {% if aluno_id == a.id|string %}selected{% endif %}>
+                {{ a.nome }}{% if a.cpf %} ({{ a.cpf }}){% endif %}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Observações</label>
+            <input type="text" name="observacoes" class="form-control" placeholder="Opcional..."/>
+          </div>
+          <button type="submit" name="acao" value="registrar"
+                  class="btn w-100 fw-semibold" style="background:#16a34a;color:#fff;">
+            <i class="bi bi-check-circle me-2"></i>Confirmar Check-in
+          </button>
+          {% else %}
+          <button type="submit" name="acao" value="buscar" class="btn btn-primary w-100">
+            <i class="bi bi-search me-2"></i>Buscar Aluno
+          </button>
+          {% endif %}
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Check-ins de hoje -->
+  <div class="col-md-7">
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-clock-history me-2" style="color:#6366f1;"></i>Check-ins de Hoje</span>
+        <span class="badge" style="background:#dcfce7;color:#166534;font-size:.8rem;">
+          {{ presencas_hoje|length }} registros
+        </span>
+      </div>
+      <div class="table-card">
+        <table class="table">
+          <thead>
+            <tr><th>Horário</th><th>Aluno</th><th>Obs.</th></tr>
+          </thead>
+          <tbody>
+            {% for item in presencas_hoje %}
+            <tr>
+              <td>
+                <span class="badge" style="background:#ede9fe;color:#4f46e5;">
+                  {{ item.data_hora.strftime("%H:%M") }}
+                </span>
+              </td>
+              <td>
+                <a href="/alunos/{{ item.aluno_id }}" class="text-decoration-none fw-semibold" style="color:#1e293b;">
+                  {{ item.aluno.nome if item.aluno else item.aluno_id }}
+                </a>
+              </td>
+              <td class="text-muted">{{ item.observacoes or "—" }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3">
+              <div class="empty-state">
+                <i class="bi bi-check2-square"></i>
+                <p>Nenhum check-in registrado hoje</p>
+              </div>
+            </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

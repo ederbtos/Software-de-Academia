@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Treinos{% endblock %}
+{% block page_title %}<i class="bi bi-lightning-charge me-2" style="color:#f59e0b;"></i>Treinos{% endblock %}
+{% block topbar_actions %}
+  <a href="/treinos/novo" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Novo Treino</a>
+{% endblock %}
+
+{% block content %}
+<!-- Filtro -->
+<div class="card mb-4">
+  <div class="card-body py-3 px-4">
+    <form method="get" action="/treinos" class="d-flex gap-2 align-items-center">
+      <div class="input-group" style="max-width:380px;">
+        <span class="input-group-text"><i class="bi bi-search text-muted"></i></span>
+        <input type="text" name="busca_aluno" class="form-control" placeholder="Nome do aluno..."
+               value="{{ busca_aluno or '' }}"/>
+      </div>
+      <button type="submit" class="btn btn-outline-primary btn-sm">Filtrar</button>
+      {% if busca_aluno %}<a href="/treinos" class="btn btn-outline-secondary btn-sm">Limpar</a>{% endif %}
+    </form>
+  </div>
+</div>
+
+{% if treinos %}
+<div class="row g-3">
+  {% for treino in treinos %}
+  <div class="col-sm-6 col-xl-4">
+    <a href="/treinos/{{ treino.id }}" class="text-decoration-none">
+      <div class="card item-card h-100" style="border-left:3px solid #f59e0b !important;">
+        <div class="d-flex align-items-start gap-3">
+          <!-- badge identificador -->
+          <div style="width:42px;height:42px;border-radius:12px;background:#fefce8;
+                      display:flex;align-items:center;justify-content:center;
+                      font-weight:700;color:#ca8a04;font-size:.9rem;flex-shrink:0;">
+            {{ treino.identificador }}
+          </div>
+          <div class="flex-grow-1 min-width-0">
+            <div class="fw-semibold text-dark mb-1">{{ treino.nome or ("Treino " + treino.identificador) }}</div>
+            <a href="/alunos/{{ treino.aluno_id }}" class="text-muted text-decoration-none" style="font-size:.78rem;"
+               onclick="event.stopPropagation()">
+              <i class="bi bi-person me-1"></i>{{ treino.aluno.nome if treino.aluno else treino.aluno_id }}
+            </a>
+            {% if treino.objetivo %}
+            <div class="text-muted mt-1" style="font-size:.75rem;">{{ treino.objetivo }}</div>
+            {% endif %}
+          </div>
+          {% if treino.ativo %}
+            <span class="badge" style="background:#dcfce7;color:#166534;font-size:.65rem;">Ativo</span>
+          {% else %}
+            <span class="badge" style="background:#f1f5f9;color:#64748b;font-size:.65rem;">Inativo</span>
+          {% endif %}
+        </div>
+        <div class="d-flex justify-content-between mt-3" style="font-size:.75rem;color:#94a3b8;">
+          <span><i class="bi bi-list-check me-1"></i>{{ treino.exercicios|length }} exercício(s)</span>
+          {% if treino.data_validade %}
+            {% if treino.data_validade < hoje %}
+              <span style="color:#dc2626;"><i class="bi bi-calendar-x me-1"></i>Vencido {{ treino.data_validade.strftime("%d/%m/%Y") }}</span>
+            {% else %}
+              <span><i class="bi bi-calendar me-1"></i>{{ treino.data_validade.strftime("%d/%m/%Y") }}</span>
+            {% endif %}
+          {% endif %}
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <i class="bi bi-lightning-charge"></i>
+    <p>Nenhum treino encontrado.</p>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

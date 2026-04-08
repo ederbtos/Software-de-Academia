@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Recuperar Senha — AcademiaSys{% endblock %}
+{% block content %}
+<div class="d-flex min-vh-100">
+  <div class="d-none d-lg-flex flex-column justify-content-between p-5 text-white"
+       style="width:50%; background: linear-gradient(145deg, #0f172a 0%, #1e1b4b 60%, #312e81 100%);">
+    <div class="d-flex align-items-center gap-3">
+      <div style="width:40px;height:40px;background:#6366f1;border-radius:12px;display:flex;align-items:center;justify-content:center;">
+        <i class="bi bi-activity fs-5"></i>
+      </div>
+      <span class="fw-bold fs-5">AcademiaSys</span>
+    </div>
+    <div>
+      <h2 class="fw-bold mb-3" style="font-size:2rem;line-height:1.3;">Recuperação de senha</h2>
+      <p style="color:#a5b4fc;font-size:.9rem;">Informe seu e-mail e enviaremos<br>um link para redefinir sua senha.</p>
+    </div>
+    <div></div>
+  </div>
+
+  <div class="d-flex flex-column justify-content-center align-items-center flex-grow-1 p-4" style="background:#f8fafc;">
+    <div style="width:100%;max-width:400px;">
+      <a href="/login" class="btn btn-sm btn-outline-secondary mb-4">
+        <i class="bi bi-arrow-left me-1"></i>Voltar ao login
+      </a>
+      <h4 class="fw-bold mb-1" style="color:#1e293b;">Esqueceu a senha?</h4>
+      <p class="text-muted mb-4" style="font-size:.875rem;">Digite seu e-mail e o slug da academia (se funcionário).</p>
+
+      {% if success %}
+      <div class="alert alert-success d-flex align-items-start gap-2" style="border-radius:10px;">
+        <i class="bi bi-check-circle-fill mt-1"></i>
+        <div>
+          <div class="fw-semibold">Link enviado!</div>
+          <div style="font-size:.83rem;">{{ success }}</div>
+          {% if dev_link %}
+          <div class="mt-2 p-2 rounded" style="background:#f0fdf4;border:1px dashed #86efac;font-size:.75rem;word-break:break-all;">
+            <strong>DEV:</strong> <a href="{{ dev_link }}">{{ dev_link }}</a>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% elif error %}
+      <div class="alert alert-danger d-flex align-items-center gap-2" style="border-radius:10px;">
+        <i class="bi bi-exclamation-circle-fill"></i><span>{{ error }}</span>
+      </div>
+      {% endif %}
+
+      {% if not success %}
+      <form method="post" action="/auth/esqueci-senha">
+        <div class="mb-3">
+          <label class="form-label">E-mail *</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-envelope text-muted"></i></span>
+            <input type="email" name="email" class="form-control" placeholder="seu@email.com" required autofocus/>
+          </div>
+        </div>
+        <div class="mb-4" id="slugField">
+          <label class="form-label">Academia <span class="text-muted" style="font-size:.8rem;">(slug — apenas se funcionário)</span></label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-building text-muted"></i></span>
+            <input type="text" name="slug" class="form-control" placeholder="minhacademia (opcional)"/>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
+          <i class="bi bi-send me-2"></i>Enviar link de recuperação
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

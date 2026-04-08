@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Treino — {{ treino.identificador }}{% endblock %}
+{% block page_title %}
+  <a href="/alunos/{{ treino.aluno_id }}" class="btn btn-sm btn-outline-secondary me-3"><i class="bi bi-arrow-left"></i></a>
+  <span class="badge me-2" style="background:#fefce8;color:#92400e;font-size:.9rem;padding:.4em .8em;">{{ treino.identificador }}</span>
+  {{ treino.nome or ("Treino " + treino.identificador) }}
+{% endblock %}
+{% block topbar_actions %}
+  <a href="/treinos" class="btn btn-outline-secondary btn-sm"><i class="bi bi-list me-1"></i>Todos</a>
+  <a href="/treinos/{{ treino.id }}/editar" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil me-1"></i>Editar</a>
+  <form method="post" action="/treinos/{{ treino.id }}/desativar" class="d-inline" onsubmit="return confirm('Desativar este treino?')">
+    <button type="submit" class="btn btn-sm" style="background:#fee2e2;color:#dc2626;border:1px solid #fecaca;">
+      <i class="bi bi-archive me-1"></i>Desativar
+    </button>
+  </form>
+{% endblock %}
+
+{% block content %}
+<!-- Info card -->
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-sm-6 col-md-3">
+        <div class="text-muted" style="font-size:.75rem;">ALUNO</div>
+        <a href="/alunos/{{ treino.aluno_id }}" class="fw-semibold text-decoration-none" style="color:#1e293b;">
+          {{ treino.aluno.nome if treino.aluno else treino.aluno_id }}
+        </a>
+      </div>
+      <div class="col-sm-6 col-md-3">
+        <div class="text-muted" style="font-size:.75rem;">OBJETIVO</div>
+        <div class="fw-semibold" style="color:#1e293b;">{{ treino.objetivo or "—" }}</div>
+      </div>
+      <div class="col-sm-6 col-md-3">
+        <div class="text-muted" style="font-size:.75rem;">PROFESSOR</div>
+        <div class="fw-semibold" style="color:#1e293b;">{{ treino.professor.nome if treino.professor else "—" }}</div>
+      </div>
+      <div class="col-sm-6 col-md-3">
+        <div class="text-muted" style="font-size:.75rem;">VALIDADE</div>
+        <div class="fw-semibold" style="color:#1e293b;">
+          {% if treino.data_validade %}
+            {% if treino.data_validade < hoje %}
+              <span style="color:#dc2626;"><i class="bi bi-calendar-x me-1"></i>{{ treino.data_validade.strftime("%d/%m/%Y") }}</span>
+            {% else %}
+              <i class="bi bi-calendar-check me-1"></i>{{ treino.data_validade.strftime("%d/%m/%Y") }}
+            {% endif %}
+          {% else %}—{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Exercícios como cards -->
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h6 class="fw-bold mb-0" style="color:#1e293b;">
+    <i class="bi bi-list-check me-2" style="color:#6366f1;"></i>Exercícios
+    <span class="badge ms-1" style="background:#ede9fe;color:#4f46e5;font-size:.75rem;">{{ treino.exercicios|length }}</span>
+  </h6>
+</div>
+
+<div class="row g-3">
+  {% for ex in treino.exercicios|sort(attribute='ordem') %}
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100" style="border-left:3px solid #6366f1 !important;">
+      <div class="card-body">
+        <div class="d-flex align-items-start gap-3 mb-3">
+          <div style="width:32px;height:32px;border-radius:8px;background:#ede9fe;
+                      display:flex;align-items:center;justify-content:center;
+                      font-size:.8rem;font-weight:700;color:#6366f1;flex-shrink:0;">
+            {{ ex.ordem }}
+          </div>
+          <div>
+            <div class="fw-semibold" style="color:#1e293b;">{{ ex.exercicio.nome }}</div>
+            {% if ex.exercicio.grupo_muscular %}
+            <span class="badge mt-1" style="background:#e0f2fe;color:#0369a1;font-size:.68rem;">
+              {{ ex.exercicio.grupo_muscular }}
+            </span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="row g-2" style="font-size:.8rem;">
+          <div class="col-4 text-center p-2 rounded" style="background:#f8fafc;">
+            <div class="fw-bold" style="color:#1e293b;">{{ ex.series }}</div>
+            <div class="text-muted">Séries</div>
+          </div>
+          <div class="col-4 text-center p-2 rounded" style="background:#f8fafc;">
+            <div class="fw-bold" style="color:#1e293b;">{{ ex.repeticoes }}</div>
+            <div class="text-muted">Reps</div>
+          </div>
+          <div class="col-4 text-center p-2 rounded" style="background:#f8fafc;">
+            <div class="fw-bold" style="color:#1e293b;">{{ ex.carga_kg or "—" }}{% if ex.carga_kg %}<small style="font-size:.65rem;color:#64748b;"> kg</small>{% endif %}</div>
+            <div class="text-muted">Carga</div>
+          </div>
+        </div>
+        {% if ex.descanso_segundos %}
+        <div class="mt-2" style="font-size:.75rem;color:#64748b;">
+          <i class="bi bi-stopwatch me-1"></i>Descanso: {{ ex.descanso_segundos }}s
+        </div>
+        {% endif %}
+        {% if ex.observacoes %}
+        <div class="mt-2 p-2 rounded" style="background:#f8fafc;font-size:.75rem;color:#64748b;">
+          {{ ex.observacoes }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-12">
+    <div class="empty-state">
+      <i class="bi bi-list-check"></i>
+      <p>Nenhum exercício neste treino.</p>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

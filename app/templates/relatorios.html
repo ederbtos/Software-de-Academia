@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Relatórios Financeiros{% endblock %}
+{% block page_title %}<i class="bi bi-bar-chart-line me-2" style="color:#16a34a;"></i>Relatórios Financeiros{% endblock %}
+{% block topbar_actions %}
+  <a href="/relatorios/exportar-csv" class="btn btn-outline-success btn-sm">
+    <i class="bi bi-download me-1"></i>Exportar CSV
+  </a>
+{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- Stat cards -->
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="stat-card stat-success">
+      <div class="stat-icon"><i class="bi bi-cash-coin"></i></div>
+      <div class="stat-info">
+        <span class="stat-label">Receita do Mês</span>
+        <span class="stat-value">R$&nbsp;{{ "%.2f"|format(dados.total_mes_atual) }}</span>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat-card stat-primary">
+      <div class="stat-icon"><i class="bi bi-graph-up-arrow"></i></div>
+      <div class="stat-info">
+        <span class="stat-label">Receita do Ano</span>
+        <span class="stat-value">R$&nbsp;{{ "%.2f"|format(dados.total_ano) }}</span>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat-card stat-danger">
+      <div class="stat-icon"><i class="bi bi-hourglass-split"></i></div>
+      <div class="stat-info">
+        <span class="stat-label">Em Aberto</span>
+        <span class="stat-value">R$&nbsp;{{ "%.2f"|format(dados.total_pendente) }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Gráficos -->
+<div class="row g-3 mb-4">
+  <div class="col-lg-8">
+    <div class="card h-100">
+      <div class="card-header">
+        <span class="fw-semibold" style="color:#1e293b;">Receita Mensal — Últimos 12 Meses</span>
+      </div>
+      <div class="card-body">
+        <canvas id="chartReceita" height="110"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header">
+        <span class="fw-semibold" style="color:#1e293b;">Pagamentos — Mês Atual</span>
+      </div>
+      <div class="card-body d-flex align-items-center justify-content-center">
+        {% if dados.por_metodo %}
+        <canvas id="chartMetodo" style="max-height:240px;"></canvas>
+        {% else %}
+        <div class="empty-state" style="padding:2rem;">
+          <i class="bi bi-pie-chart" style="font-size:2rem;color:#cbd5e1;"></i>
+          <p style="font-size:.8rem;" class="mt-2 mb-0">Sem pagamentos no mês atual.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Detalhamento mensal -->
+<div class="card">
+  <div class="card-header">
+    <span class="fw-semibold" style="color:#1e293b;">Detalhamento Mensal</span>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0" style="font-size:.85rem;">
+      <thead style="background:#f8fafc;">
+        <tr>
+          <th style="padding:12px 16px;color:#64748b;font-weight:600;font-size:.75rem;
+                     text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #e2e8f0;">Mês</th>
+          <th style="padding:12px 16px;color:#64748b;font-weight:600;font-size:.75rem;
+                     text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #e2e8f0;
+                     text-align:right;">Receita (R$)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in dados.receita_mensal | reverse %}
+        <tr style="border-bottom:1px solid #f1f5f9;">
+          <td style="padding:11px 16px;color:#334155;">{{ r.mes }}</td>
+          <td style="padding:11px 16px;text-align:right;font-weight:600;color:#16a34a;">
+            {{ "%.2f"|format(r.total) }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const labels = {{ dados.receita_mensal | map(attribute='mes') | list | tojson }};
+const valores = {{ dados.receita_mensal | map(attribute='total') | list | tojson }};
+
+new Chart(document.getElementById('chartReceita'), {
+  type: 'bar',
+  data: {
+    labels: labels,
+    datasets: [{
+      label: 'Receita (R$)',
+      data: valores,
+      backgroundColor: 'rgba(99,102,241,0.75)',
+      borderRadius: 6,
+      borderSkipped: false,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { beginAtZero: true, grid: { color: '#f1f5f9' } },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+{% if dados.por_metodo %}
+const metodosLabels = {{ dados.por_metodo | map(attribute='metodo') | list | tojson }};
+const metodosValores = {{ dados.por_metodo | map(attribute='total') | list | tojson }};
+new Chart(document.getElementById('chartMetodo'), {
+  type: 'doughnut',
+  data: {
+    labels: metodosLabels,
+    datasets: [{
+      data: metodosValores,
+      backgroundColor: ['#6366f1','#0284c7','#16a34a','#ca8a04','#dc2626'],
+      borderWidth: 2,
+      borderColor: '#fff'
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } }
+  }
+});
+{% endif %}
+</script>
+{% endblock %}

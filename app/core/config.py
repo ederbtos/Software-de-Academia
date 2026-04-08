@@ -11,6 +11,13 @@ class Settings(BaseSettings):
     superadmin_password: str = "Admin@123"
     base_domain: str = "sistema.com"
 
+    # SMTP
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_pass: str = ""
+    smtp_from: str = ""
+
     class Config:
         env_file = ".env"
 

@@ -96,3 +96,47 @@ def atualizar_status_matriculas(db: Session):
         Matricula.status == MatriculaStatus.ativa,
     ).update({"status": MatriculaStatus.vencida})
     db.commit()
+
+
+def renovar_matricula(matricula_id: int, db: Session) -> Matricula:
+    """Renova uma matrícula gerando um novo período e pagamento."""
+    from datetime import timedelta
+    matricula = db.query(Matricula).filter(Matricula.id == matricula_id).first()
+    if not matricula:
+        raise HTTPException(status_code=404, detail="Matrícula não encontrada")
+
+    from app.models.tenant import Plano
+    plano_obj = db.query(Plano).filter(Plano.id == matricula.plano_id).first()
+    if not plano_obj:
+        raise HTTPException(status_code=404, detail="Plano não encontrado")
+
+    nova_inicio = matricula.data_vencimento
+    nova_vencimento = nova_inicio + timedelta(days=plano_obj.duracao_dias)
+
+    matricula.data_inicio = nova_inicio
+    matricula.data_vencimento = nova_vencimento
+    matricula.status = MatriculaStatus.ativa
+    db.flush()
+
+    pagamento = Pagamento(
+        matricula_id=matricula.id,
+        valor=plano_obj.valor,
+        data_vencimento=nova_vencimento,
+        status=PagamentoStatus.pendente,
+    )
+    db.add(pagamento)
+    db.commit()
+    db.refresh(matricula)
+    return matricula
+
+
+def trocar_senha_funcionario(funcionario_id: int, senha_atual: str, nova_senha: str, db: Session):
+    from app.models.tenant import Funcionario
+    from app.core.security import verify_password, hash_password
+    func = db.query(Funcionario).filter(Funcionario.id == funcionario_id).first()
+    if not func:
+        raise HTTPException(status_code=404, detail="Funcionário não encontrado")
+    if not verify_password(senha_atual, func.senha_hash):
+        raise HTTPException(status_code=400, detail="Senha atual incorreta")
+    func.senha_hash = hash_password(nova_senha)
+    db.commit()

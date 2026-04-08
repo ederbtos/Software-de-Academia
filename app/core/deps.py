@@ -27,7 +27,7 @@ def get_current_user_public(
     payload = decode_token(token)
     if not payload or payload.get("scope") != "public":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
-    user = db.query(UsuarioPublic).filter(UsuarioPublic.id == payload["sub"]).first()
+    user = db.query(UsuarioPublic).filter(UsuarioPublic.id == int(payload["sub"])).first()
     if not user or not user.ativo:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuário inativo")
     return user
@@ -40,13 +40,26 @@ def require_superadmin(user: UsuarioPublic = Depends(get_current_user_public)) -
 
 
 def get_schema_from_request(request: Request, db: Session = Depends(get_db)) -> str:
-    """Extrai o slug do subdomínio e devolve o schema_name da academia."""
+    """Resolve o schema do tenant: token JWT tem prioridade; fallback para subdomínio."""
+    # 1) Tenta extrair do token (funciona em localhost e em produção)
+    token = request.cookies.get("access_token")
+    if not token:
+        auth = request.headers.get("Authorization", "")
+        token = auth.removeprefix("Bearer ").strip() or None
+    if token:
+        payload = decode_token(token)
+        if payload and payload.get("schema"):
+            return payload["schema"]
+
+    # 2) Fallback: subdomínio do host (produção sem token ainda válido)
     host = request.headers.get("host", "")
     slug = host.split(".")[0]
-    academia = db.query(Academia).filter(Academia.slug == slug).first()
-    if not academia or academia.status.value != "ativa":
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Academia não encontrada")
-    return academia.schema_name
+    if slug and slug not in ("localhost", "127", "127.0.0.1"):
+        academia = db.query(Academia).filter(Academia.slug == slug).first()
+        if academia and academia.status.value == "ativa":
+            return academia.schema_name
+
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Academia não encontrada")
 
 
 def get_tenant_session(
@@ -67,19 +80,19 @@ def get_current_funcionario(
     payload = decode_token(token)
     if not payload or payload.get("scope") != "tenant":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
-    func = db.query(Funcionario).filter(Funcionario.id == payload["sub"]).first()
+    func = db.query(Funcionario).filter(Funcionario.id == int(payload["sub"])).first()
     if not func or not func.ativo:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Funcionário inativo")
     return func
 
 
-def require_professor_or_admin(func=Depends(get_current_funcionario)):
-    if func.role.value not in ("admin", "professor"):
+def require_professor_or_admin(current_user=Depends(get_current_funcionario)):
+    if current_user.role.value not in ("admin", "professor"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado")
-    return func
+    return current_user
 
 
-def require_admin(func=Depends(get_current_funcionario)):
-    if func.role.value != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado")
-    return func
+def require_admin(current_user=Depends(get_current_funcionario)):
+    if current_user.role.value != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso restrito a administradores")
+    return current_user

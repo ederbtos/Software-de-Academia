@@ -1,0 +1,415 @@
+{% extends "base.html" %}
+{% block title %}Aluno — {{ aluno.nome }}{% endblock %}
+{% block page_title %}
+  <a href="/alunos" class="btn btn-sm btn-outline-secondary me-3"><i class="bi bi-arrow-left"></i></a>
+  {{ aluno.nome }}
+  {% if aluno.ativo %}
+    <span class="badge ms-2" style="background:#dcfce7;color:#166534;">Ativo</span>
+  {% else %}
+    <span class="badge ms-2" style="background:#f1f5f9;color:#64748b;">Inativo</span>
+  {% endif %}
+{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalEditarAluno">
+    <i class="bi bi-pencil me-1"></i>Editar
+  </button>
+  <a href="/checkin?aluno_id={{ aluno.id }}" class="btn btn-sm" style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;">
+    <i class="bi bi-check2-square me-1"></i>Check-in
+  </a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Perfil + Matrícula + Pagamento -->
+<div class="row g-3 mb-4">
+
+  <!-- Dados pessoais -->
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-person-circle me-2" style="color:#6366f1;"></i>Dados Pessoais</div>
+      <div class="card-body">
+        <!-- Avatar grande -->
+        <div class="d-flex align-items-center gap-3 mb-4">
+          <div style="width:56px;height:56px;border-radius:16px;background:#ede9fe;
+                      color:#6366f1;display:flex;align-items:center;justify-content:center;
+                      font-size:1.5rem;font-weight:700;flex-shrink:0;">
+            {{ aluno.nome[0].upper() }}
+          </div>
+          <div>
+            <div class="fw-bold" style="color:#1e293b;">{{ aluno.nome }}</div>
+            <div class="text-muted" style="font-size:.8rem;">
+              Cadastrado {{ aluno.criado_em.strftime("%d/%m/%Y") }}
+            </div>
+          </div>
+        </div>
+        <div class="row g-2" style="font-size:.83rem;">
+          {% macro row(label, val) %}
+          <div class="col-5 text-muted fw-500">{{ label }}</div>
+          <div class="col-7 text-dark">{{ val }}</div>
+          {% endmacro %}
+          <div class="col-5 text-muted">CPF</div><div class="col-7">{{ aluno.cpf or "—" }}</div>
+          <div class="col-5 text-muted">Telefone</div><div class="col-7">{{ aluno.telefone or "—" }}</div>
+          <div class="col-5 text-muted">E-mail</div><div class="col-7 text-truncate">{{ aluno.email or "—" }}</div>
+          <div class="col-5 text-muted">Nascimento</div><div class="col-7">{{ aluno.data_nascimento.strftime("%d/%m/%Y") if aluno.data_nascimento else "—" }}</div>
+          <div class="col-5 text-muted">Sexo</div><div class="col-7">{{ aluno.sexo.value.title() if aluno.sexo else "—" }}</div>
+          <div class="col-5 text-muted">Endereço</div><div class="col-7">{{ aluno.endereco or "—" }}</div>
+        </div>
+        {% if aluno.observacoes %}
+        <div class="mt-3 p-2 rounded" style="background:#f8fafc;font-size:.8rem;color:#64748b;">
+          <i class="bi bi-chat-text me-1"></i>{{ aluno.observacoes }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Matrícula -->
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-card-checklist me-2" style="color:#6366f1;"></i>Matrícula</span>
+        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalMatricula">
+          <i class="bi bi-plus"></i> Nova
+        </button>
+      </div>
+      <div class="card-body">
+        {% if matricula_ativa %}
+        <div class="mb-3 p-3 rounded-3" style="background:#f0fdf4;border:1px solid #bbf7d0;">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="fw-semibold" style="color:#166534;">{{ matricula_ativa.plano.nome }}</span>
+            {% if matricula_ativa.status.value == "ativa" %}
+              <span class="badge" style="background:#dcfce7;color:#166534;">Ativa</span>
+            {% elif matricula_ativa.status.value == "vencida" %}
+              <span class="badge" style="background:#fee2e2;color:#991b1b;">Vencida</span>
+            {% else %}
+              <span class="badge bg-secondary">{{ matricula_ativa.status.value.title() }}</span>
+            {% endif %}
+          </div>
+          <div class="d-flex justify-content-between" style="font-size:.8rem;color:#64748b;">
+            <span><i class="bi bi-calendar-check me-1"></i>Início {{ matricula_ativa.data_inicio.strftime("%d/%m/%Y") }}</span>
+            <span><i class="bi bi-calendar-x me-1"></i>Até {{ matricula_ativa.data_vencimento.strftime("%d/%m/%Y") }}</span>
+          </div>
+        </div>
+        {% else %}
+        <div class="empty-state py-4">
+          <i class="bi bi-card-checklist" style="font-size:2rem;opacity:.3;display:block;margin-bottom:8px;"></i>
+          <p style="font-size:.85rem;">Nenhuma matrícula ativa</p>
+          <button class="btn btn-primary btn-sm mt-2" data-bs-toggle="modal" data-bs-target="#modalMatricula">
+            <i class="bi bi-plus me-1"></i>Matricular
+          </button>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Último pagamento -->
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-cash-coin me-2" style="color:#ca8a04;"></i>Último Pagamento</div>
+      <div class="card-body">
+        {% if ultimo_pagamento %}
+        {% if ultimo_pagamento.status.value == "pago" %}
+        <div class="p-3 rounded-3 mb-3" style="background:#f0fdf4;border:1px solid #bbf7d0;">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <div class="fw-bold" style="font-size:1.3rem;color:#166534;">R$ {{ "%.2f"|format(ultimo_pagamento.valor) }}</div>
+              <div style="font-size:.78rem;color:#64748b;">Pago em {{ ultimo_pagamento.data_pagamento.strftime("%d/%m/%Y") if ultimo_pagamento.data_pagamento else "—" }}</div>
+            </div>
+            <span class="badge" style="background:#dcfce7;color:#166534;"><i class="bi bi-check-circle-fill me-1"></i>Pago</span>
+          </div>
+        </div>
+        {% else %}
+        <div class="p-3 rounded-3 mb-3" style="background:#fefce8;border:1px solid #fef08a;">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div>
+              <div class="fw-bold" style="font-size:1.3rem;color:#92400e;">R$ {{ "%.2f"|format(ultimo_pagamento.valor) }}</div>
+              <div style="font-size:.78rem;color:#64748b;">Vence {{ ultimo_pagamento.data_vencimento.strftime("%d/%m/%Y") }}</div>
+            </div>
+            <span class="badge" style="background:#fef9c3;color:#92400e;">Pendente</span>
+          </div>
+          <button class="btn btn-sm w-100" style="background:#16a34a;color:#fff;"
+                  data-bs-toggle="modal" data-bs-target="#modalPagar"
+                  data-pagid="{{ ultimo_pagamento.id }}">
+            <i class="bi bi-check-circle me-1"></i>Registrar Pagamento
+          </button>
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="empty-state py-4">
+          <i class="bi bi-cash-coin" style="font-size:2rem;opacity:.3;display:block;margin-bottom:8px;"></i>
+          <p style="font-size:.85rem;">Nenhum pagamento encontrado</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="card">
+  <div class="card-header p-0 px-4">
+    <ul class="nav nav-tabs border-0" id="alunoTabs">
+      <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tabTreinos"><i class="bi bi-lightning-charge me-1"></i>Treinos</a></li>
+      <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabPresenca"><i class="bi bi-check2-square me-1"></i>Presenças</a></li>
+      <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabAvaliacoes"><i class="bi bi-clipboard2-pulse me-1"></i>Avaliações</a></li>
+    </ul>
+  </div>
+
+  <div class="tab-content">
+    <!-- TREINOS -->
+    <div class="tab-pane fade show active p-4" id="tabTreinos">
+      <div class="d-flex justify-content-end mb-3">
+        <a href="/treinos/novo?aluno_id={{ aluno.id }}" class="btn btn-primary btn-sm">
+          <i class="bi bi-plus me-1"></i>Novo Treino
+        </a>
+      </div>
+      {% if treinos %}
+      <div class="row g-3">
+        {% for treino in treinos %}
+        <div class="col-md-4">
+          <a href="/treinos/{{ treino.id }}" class="text-decoration-none">
+            <div class="card item-card h-100" style="border-left:3px solid #6366f1 !important;">
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <span class="badge" style="background:#ede9fe;color:#4f46e5;font-size:.85rem;padding:.4em .8em;">
+                  {{ treino.identificador }}
+                </span>
+                {% if treino.ativo %}
+                  <span class="badge" style="background:#dcfce7;color:#166534;font-size:.68rem;">Ativo</span>
+                {% else %}
+                  <span class="badge" style="background:#f1f5f9;color:#64748b;font-size:.68rem;">Inativo</span>
+                {% endif %}
+              </div>
+              <div class="fw-semibold text-dark mb-1">{{ treino.nome or ("Treino " + treino.identificador) }}</div>
+              {% if treino.objetivo %}
+              <div class="text-muted" style="font-size:.78rem;">{{ treino.objetivo }}</div>
+              {% endif %}
+              <div class="d-flex justify-content-between align-items-center mt-3" style="font-size:.75rem;color:#94a3b8;">
+                <span><i class="bi bi-list-check me-1"></i>{{ treino.exercicios|length }} exercício(s)</span>
+                {% if treino.data_validade %}
+                <span><i class="bi bi-calendar me-1"></i>{{ treino.data_validade.strftime("%d/%m/%Y") }}</span>
+                {% endif %}
+              </div>
+            </div>
+          </a>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <i class="bi bi-lightning-charge"></i>
+        <p>Nenhum treino cadastrado.</p>
+        <a href="/treinos/novo?aluno_id={{ aluno.id }}" class="btn btn-primary btn-sm mt-2">
+          <i class="bi bi-plus me-1"></i>Criar Treino
+        </a>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- PRESENÇAS -->
+    <div class="tab-pane fade" id="tabPresenca">
+      <div class="p-1">
+        <div class="table-card">
+          <table class="table">
+            <thead>
+              <tr><th>Data/Hora</th><th>Observações</th></tr>
+            </thead>
+            <tbody>
+              {% for p in presencas %}
+              <tr>
+                <td>
+                  <span class="fw-semibold">{{ p.data_hora.strftime("%d/%m/%Y") }}</span>
+                  <span class="text-muted ms-1">{{ p.data_hora.strftime("%H:%M") }}</span>
+                </td>
+                <td class="text-muted">{{ p.observacoes or "—" }}</td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="2">
+                  <div class="empty-state py-3">
+                    <i class="bi bi-check2-square"></i>
+                    <p>Nenhuma presença registrada</p>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- AVALIAÇÕES -->
+    <div class="tab-pane fade" id="tabAvaliacoes">
+      <div class="p-4 pb-2 d-flex justify-content-end">
+        <a href="/avaliacoes/nova?aluno_id={{ aluno.id }}" class="btn btn-primary btn-sm">
+          <i class="bi bi-plus me-1"></i>Nova Avaliação
+        </a>
+      </div>
+      {% if avaliacoes %}
+      <div class="row g-3 px-4 pb-4">
+        {% for av in avaliacoes %}
+        <div class="col-md-4">
+          <a href="/avaliacoes/{{ av.id }}" class="text-decoration-none">
+            <div class="card item-card" style="border-left:3px solid #0284c7 !important;">
+              <div class="fw-semibold mb-2" style="color:#1e293b;">{{ av.data.strftime("%d/%m/%Y") }}</div>
+              <div class="row g-2" style="font-size:.8rem;">
+                {% if av.peso_kg %}<div class="col-6"><span class="text-muted">Peso</span> <strong>{{ av.peso_kg }} kg</strong></div>{% endif %}
+                {% if av.altura_cm %}<div class="col-6"><span class="text-muted">Altura</span> <strong>{{ av.altura_cm }} cm</strong></div>{% endif %}
+                {% if av.imc %}
+                <div class="col-12">
+                  <span class="text-muted">IMC</span>
+                  {% if av.imc < 18.5 %}<span class="badge ms-1" style="background:#fef9c3;color:#92400e;">{{ av.imc }} — Abaixo do peso</span>
+                  {% elif av.imc < 25 %}<span class="badge ms-1" style="background:#dcfce7;color:#166534;">{{ av.imc }} — Normal</span>
+                  {% elif av.imc < 30 %}<span class="badge ms-1" style="background:#fef9c3;color:#92400e;">{{ av.imc }} — Sobrepeso</span>
+                  {% else %}<span class="badge ms-1" style="background:#fee2e2;color:#991b1b;">{{ av.imc }} — Obeso</span>{% endif %}
+                </div>
+                {% endif %}
+                {% if av.gordura_percent %}<div class="col-6"><span class="text-muted">Gordura</span> <strong>{{ av.gordura_percent }}%</strong></div>{% endif %}
+              </div>
+            </div>
+          </a>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-state pb-4">
+        <i class="bi bi-clipboard2-pulse"></i>
+        <p>Nenhuma avaliação registrada.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- ─── Modais ─────────────────────────────────── -->
+
+<!-- Modal Editar -->
+<div class="modal fade" id="modalEditarAluno" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil me-2" style="color:#6366f1;"></i>Editar Aluno</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/alunos/{{ aluno.id }}/editar">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6"><label class="form-label">Nome *</label><input type="text" name="nome" class="form-control" value="{{ aluno.nome }}" required/></div>
+            <div class="col-md-6"><label class="form-label">E-mail</label><input type="email" name="email" class="form-control" value="{{ aluno.email or '' }}"/></div>
+            <div class="col-md-4"><label class="form-label">Telefone</label><input type="text" name="telefone" class="form-control" value="{{ aluno.telefone or '' }}"/></div>
+            <div class="col-md-4"><label class="form-label">Nascimento</label><input type="date" name="data_nascimento" class="form-control" value="{{ aluno.data_nascimento or '' }}"/></div>
+            <div class="col-md-4">
+              <label class="form-label">Sexo</label>
+              <select name="sexo" class="form-select">
+                <option value="">—</option>
+                <option value="masculino" {% if aluno.sexo and aluno.sexo.value == 'masculino' %}selected{% endif %}>Masculino</option>
+                <option value="feminino" {% if aluno.sexo and aluno.sexo.value == 'feminino' %}selected{% endif %}>Feminino</option>
+                <option value="outro" {% if aluno.sexo and aluno.sexo.value == 'outro' %}selected{% endif %}>Outro</option>
+              </select>
+            </div>
+            <div class="col-12"><label class="form-label">Endereço</label><input type="text" name="endereco" class="form-control" value="{{ aluno.endereco or '' }}"/></div>
+            <div class="col-12"><label class="form-label">Observações</label><textarea name="observacoes" class="form-control" rows="2">{{ aluno.observacoes or '' }}</textarea></div>
+            <div class="col-md-4">
+              <label class="form-label">Status</label>
+              <select name="ativo" class="form-select">
+                <option value="1" {% if aluno.ativo %}selected{% endif %}>Ativo</option>
+                <option value="0" {% if not aluno.ativo %}selected{% endif %}>Inativo</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Matricular -->
+<div class="modal fade" id="modalMatricula" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-card-checklist me-2" style="color:#6366f1;"></i>Nova Matrícula</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/matriculas">
+        <input type="hidden" name="aluno_id" value="{{ aluno.id }}"/>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Plano *</label>
+            <select name="plano_id" class="form-select" required>
+              {% for p in planos %}
+              <option value="{{ p.id }}">{{ p.nome }} — R$ {{ "%.2f"|format(p.valor) }} / {{ p.duracao_dias }} dias</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Data de início *</label>
+            <input type="date" name="data_inicio" class="form-control" required value="{{ hoje }}"/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Observações</label>
+            <textarea name="observacoes" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Matricular</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Registrar Pagamento -->
+<div class="modal fade" id="modalPagar" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-cash-coin me-2" style="color:#ca8a04;"></i>Registrar Pagamento</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/pagamentos/pagar">
+        <input type="hidden" name="pagamento_id" id="inputPagId"/>
+        <input type="hidden" name="redirect_url" value="/alunos/{{ aluno.id }}"/>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Método de Pagamento *</label>
+            <select name="metodo" class="form-select" required>
+              <option value="dinheiro">Dinheiro</option>
+              <option value="pix">PIX</option>
+              <option value="cartao_credito">Cartão de Crédito</option>
+              <option value="cartao_debito">Cartão de Débito</option>
+              <option value="transferencia">Transferência</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Data do Pagamento</label>
+            <input type="date" name="data_pagamento" class="form-control" value="{{ hoje }}"/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Observações</label>
+            <textarea name="observacoes" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success"><i class="bi bi-check-circle me-1"></i>Confirmar Pagamento</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+document.getElementById('modalPagar').addEventListener('show.bs.modal', function(e) {
+  const btn = e.relatedTarget;
+  if (btn) document.getElementById('inputPagId').value = btn.dataset.pagid;
+});
+</script>
+{% endblock %}
