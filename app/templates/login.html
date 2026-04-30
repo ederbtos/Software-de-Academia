@@ -42,13 +42,13 @@
       <p class="text-muted mb-4" style="font-size:.875rem;">Faça login para acessar o painel</p>
 
       {% if error %}
-      <div class="alert alert-danger d-flex align-items-center gap-2 mb-4" style="border-radius:10px;">
+      <div class="alert alert-danger d-flex align-items-center gap-2 mb-4" style="border-radius:10px;" role="alert" aria-live="assertive">
         <i class="bi bi-exclamation-circle-fill"></i>
         <span>{{ error }}</span>
       </div>
       {% endif %}
       {% if success %}
-      <div class="alert alert-success d-flex align-items-center gap-2 mb-4" style="border-radius:10px;">
+      <div class="alert alert-success d-flex align-items-center gap-2 mb-4" style="border-radius:10px;" role="status" aria-live="polite">
         <i class="bi bi-check-circle-fill"></i>
         <span>{{ success }}</span>
       </div>
@@ -64,20 +64,21 @@
           </div>
         </div>
         <div class="mb-3">
-          <label class="form-label">E-mail</label>
+          <label class="form-label" for="loginEmail">E-mail</label>
           <div class="input-group">
             <span class="input-group-text"><i class="bi bi-envelope text-muted"></i></span>
-            <input type="email" name="email" class="form-control"
+            <input type="email" name="email" id="loginEmail" class="form-control"
                    placeholder="seu@email.com" required autofocus/>
           </div>
         </div>
         <div class="mb-4">
-          <label class="form-label">Senha</label>
+          <label class="form-label" for="inputSenha">Senha</label>
           <div class="input-group">
             <span class="input-group-text"><i class="bi bi-lock text-muted"></i></span>
             <input type="password" name="password" id="inputSenha" class="form-control"
                    placeholder="••••••••" required/>
             <button type="button" class="input-group-text bg-white border-start-0"
+                    aria-label="Mostrar ou ocultar senha" aria-pressed="false"
                     onclick="toggleSenha()" style="cursor:pointer;">
               <i class="bi bi-eye" id="iconOlho" style="color:#94a3b8;"></i>
             </button>
@@ -89,7 +90,12 @@
       </form>
       <div class="d-flex justify-content-between mt-3" style="font-size:.8rem;">
         <a href="/auth/esqueci-senha" style="color:#6366f1;text-decoration:none;">Esqueci minha senha</a>
-        <a href="#" onclick="toggleSlug(event)" style="color:#6366f1;text-decoration:none;">Sou funcionário</a>
+        <a href="#"
+           aria-controls="slugField"
+           aria-expanded="false"
+           id="toggleSlugLink"
+           onclick="toggleSlug(event)"
+           style="color:#6366f1;text-decoration:none;">Sou funcionário</a>
       </div>
     </div>
   </div>
@@ -99,19 +105,24 @@
 <script>
 function toggleSenha() {
   const inp = document.getElementById('inputSenha');
+  const btn = inp.parentElement.querySelector('button');
   const ico = document.getElementById('iconOlho');
   if (inp.type === 'password') {
     inp.type = 'text'; ico.className = 'bi bi-eye-slash';
+    btn.setAttribute('aria-pressed', 'true');
   } else {
     inp.type = 'password'; ico.className = 'bi bi-eye';
+    btn.setAttribute('aria-pressed', 'false');
   }
 }
 function toggleSlug(e) {
   e.preventDefault();
   const el = document.getElementById('slugField');
+  const link = document.getElementById('toggleSlugLink');
   const inp = document.getElementById('inputSlug');
   const visible = el.style.display !== 'none';
   el.style.display = visible ? 'none' : 'block';
+  link.setAttribute('aria-expanded', (!visible).toString());
   if (!visible) inp.focus(); else inp.value = '';
 }
 </script>

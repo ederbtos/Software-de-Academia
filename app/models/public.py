@@ -83,3 +83,21 @@ class PasswordResetToken(Base):
     usado = Column(Boolean, default=False)
     expira_em = Column(DateTime, nullable=False)
     criado_em = Column(DateTime, default=datetime.utcnow)
+
+
+class AuditLog(Base):
+    """Trilha de auditoria de ações críticas."""
+    __tablename__ = "audit_logs"
+    __table_args__ = {"schema": "public"}
+
+    id = Column(Integer, primary_key=True, index=True)
+    actor_id = Column(String(40), nullable=True)
+    actor_scope = Column(String(20), nullable=True)  # public|tenant
+    actor_role = Column(String(40), nullable=True)
+    action = Column(String(80), nullable=False)
+    resource_type = Column(String(80), nullable=False)
+    resource_id = Column(String(80), nullable=True)
+    schema_name = Column(String(80), nullable=True)
+    details = Column(Text, nullable=True)
+    ip = Column(String(45), nullable=True)
+    criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)

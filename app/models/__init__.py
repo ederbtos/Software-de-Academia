@@ -1,4 +1,4 @@
-from app.models.public import Academia, UsuarioPublic, PlanoGlobal
+from app.models.public import Academia, UsuarioPublic, PlanoGlobal, AuditLog
 from app.models.tenant import (
     Funcionario, Plano, Aluno, Matricula, Pagamento,
     Presenca, AvaliacaoFisica, Treino, Exercicio, TreinoExercicio,
@@ -6,7 +6,7 @@ from app.models.tenant import (
 )
 
 __all__ = [
-    "Academia", "UsuarioPublic", "PlanoGlobal",
+    "Academia", "UsuarioPublic", "PlanoGlobal", "AuditLog",
     "Funcionario", "Plano", "Aluno", "Matricula", "Pagamento",
     "Presenca", "AvaliacaoFisica", "Treino", "Exercicio", "TreinoExercicio",
     "Aula", "InscricaoAula", "Notificacao",

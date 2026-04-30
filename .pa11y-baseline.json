@@ -1,0 +1,22 @@
+{
+  "total_issues_baseline": 0,
+  "allowed_delta_abs": 5,
+  "allowed_delta_pct": 20,
+  "routes": {
+    "http://127.0.0.1:8000/login": {
+      "baseline": 0,
+      "allowed_delta_abs": 2,
+      "allowed_delta_pct": 20
+    },
+    "http://127.0.0.1:8000/dashboard": {
+      "baseline": 0,
+      "allowed_delta_abs": 2,
+      "allowed_delta_pct": 20
+    },
+    "http://127.0.0.1:8000/alunos": {
+      "baseline": 0,
+      "allowed_delta_abs": 2,
+      "allowed_delta_pct": 20
+    }
+  }
+}

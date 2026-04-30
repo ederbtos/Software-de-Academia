@@ -1,0 +1,79 @@
+{
+  "defaults": {
+    "standard": "WCAG2AA",
+    "timeout": 30000,
+    "wait": 800,
+    "chromeLaunchConfig": {
+      "args": ["--no-sandbox"]
+    },
+    "actions": [
+      "wait for element input[name=\"email\"] to be visible",
+      "set field input[name=\"email\"] to admin@sistema.com",
+      "set field input[name=\"password\"] to accessibility-superadmin",
+      "click element button[type=\"submit\"]",
+      "wait for path to be /superadmin"
+    ]
+  },
+  "urls": [
+    {
+      "url": "http://127.0.0.1:8000/login",
+      "actions": []
+    },
+    {
+      "url": "http://127.0.0.1:8000/auth/esqueci-senha",
+      "actions": []
+    },
+    {
+      "url": "http://127.0.0.1:8000/login",
+      "actions": ["navigate to http://127.0.0.1:8000/superadmin"]
+    },
+    {
+      "url": "http://127.0.0.1:8000/login",
+      "actions": ["navigate to http://127.0.0.1:8000/superadmin/auditoria"]
+    },
+    {
+      "url": "http://127.0.0.1:8000/login",
+      "actions": ["navigate to http://127.0.0.1:8000/dashboard"]
+    },
+    {
+      "url": "http://127.0.0.1:8000/login",
+      "actions": ["navigate to http://127.0.0.1:8000/alunos"]
+    },
+    {
+      "url": "http://127.0.0.1:8000/login",
+      "actions": ["navigate to http://127.0.0.1:8000/matriculas"]
+    },
+    {
+      "url": "http://127.0.0.1:8000/login",
+      "actions": ["navigate to http://127.0.0.1:8000/planos"]
+    },
+    {
+      "url": "http://127.0.0.1:8000/login",
+      "actions": ["navigate to http://127.0.0.1:8000/funcionarios"]
+    },
+    {
+      "url": "http://127.0.0.1:8000/login",
+      "actions": ["navigate to http://127.0.0.1:8000/relatorios"]
+    },
+    {
+      "url": "http://127.0.0.1:8000/login",
+      "actions": ["navigate to http://127.0.0.1:8000/aulas"]
+    },
+    {
+      "url": "http://127.0.0.1:8000/login",
+      "actions": ["navigate to http://127.0.0.1:8000/treinos"]
+    },
+    {
+      "url": "http://127.0.0.1:8000/login",
+      "actions": ["navigate to http://127.0.0.1:8000/avaliacoes"]
+    },
+    {
+      "url": "http://127.0.0.1:8000/login",
+      "actions": ["navigate to http://127.0.0.1:8000/exercicios"]
+    },
+    {
+      "url": "http://127.0.0.1:8000/login",
+      "actions": ["navigate to http://127.0.0.1:8000/configuracoes"]
+    }
+  ]
+}

@@ -1,0 +1,241 @@
+name: Accessibility
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pa11y-strict:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: academia
+          POSTGRES_PASSWORD: academia
+          POSTGRES_DB: academia
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U academia"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run app for accessibility checks
+        env:
+          DATABASE_URL: postgresql://academia:academia@127.0.0.1:5432/academia
+          SECRET_KEY: accessibility-secret
+          SUPERADMIN_PASSWORD: accessibility-superadmin
+          APP_ENV: dev
+          CSRF_ENABLED: true
+        run: |
+          nohup uvicorn main:app --host 127.0.0.1 --port 8000 > uvicorn.log 2>&1 &
+          sleep 8
+          curl -f http://127.0.0.1:8000/login >/dev/null
+
+      - name: Build strict config
+        run: |
+          cat > .pa11yci.strict.json << 'EOF'
+          {
+            "defaults": {
+              "standard": "WCAG2AA",
+              "timeout": 30000,
+              "wait": 800,
+              "chromeLaunchConfig": { "args": ["--no-sandbox"] }
+            },
+            "urls": [
+              "http://127.0.0.1:8000/login",
+              "http://127.0.0.1:8000/auth/esqueci-senha",
+              {
+                "url": "http://127.0.0.1:8000/login",
+                "actions": [
+                  "wait for element input[name=\"email\"] to be visible",
+                  "set field input[name=\"email\"] to admin@sistema.com",
+                  "set field input[name=\"password\"] to accessibility-superadmin",
+                  "click element button[type=\"submit\"]",
+                  "wait for path to be /superadmin",
+                  "navigate to http://127.0.0.1:8000/dashboard"
+                ]
+              },
+              {
+                "url": "http://127.0.0.1:8000/login",
+                "actions": [
+                  "wait for element input[name=\"email\"] to be visible",
+                  "set field input[name=\"email\"] to admin@sistema.com",
+                  "set field input[name=\"password\"] to accessibility-superadmin",
+                  "click element button[type=\"submit\"]",
+                  "wait for path to be /superadmin",
+                  "navigate to http://127.0.0.1:8000/alunos"
+                ]
+              }
+            ]
+          }
+          EOF
+
+      - name: Run Pa11y strict gate (blocking)
+        run: npx --yes pa11y-ci --config .pa11yci.strict.json --threshold 0
+
+  pa11y-monitoring:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: academia
+          POSTGRES_PASSWORD: academia
+          POSTGRES_DB: academia
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U academia"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run app for accessibility checks
+        env:
+          DATABASE_URL: postgresql://academia:academia@127.0.0.1:5432/academia
+          SECRET_KEY: accessibility-secret
+          SUPERADMIN_PASSWORD: accessibility-superadmin
+          APP_ENV: dev
+          CSRF_ENABLED: true
+        run: |
+          nohup uvicorn main:app --host 127.0.0.1 --port 8000 > uvicorn.log 2>&1 &
+          sleep 8
+          curl -f http://127.0.0.1:8000/login >/dev/null
+
+      - name: Run Pa11y monitoring (non-blocking)
+        run: npx --yes pa11y-ci --config .pa11yci.json --threshold 0 --reporter json > pa11y-monitoring-report.json
+
+      - name: Compare with accessibility baseline
+        id: baseline_compare
+        run: |
+          python - << 'PY'
+          import json, math, sys
+
+          with open("pa11y-monitoring-report.json", "r", encoding="utf-8") as f:
+            report = json.load(f)
+          with open(".pa11y-baseline.json", "r", encoding="utf-8") as f:
+            baseline = json.load(f)
+
+          total = 0
+          by_url = {}
+          if isinstance(report, list):
+            for page in report:
+              if not isinstance(page, dict):
+                continue
+              issues = page.get("issues", []) or []
+              count = len(issues)
+              url = page.get("pageUrl") or page.get("url") or "unknown"
+              by_url[url] = by_url.get(url, 0) + count
+              total += count
+
+          base = int(baseline.get("total_issues_baseline", 0))
+          delta_abs = int(baseline.get("allowed_delta_abs", 0))
+          delta_pct = float(baseline.get("allowed_delta_pct", 0))
+          route_baselines = baseline.get("routes", {}) or {}
+
+          allowed_by_abs = base + delta_abs
+          allowed_by_pct = base * (1 + (delta_pct / 100.0))
+          allowed_max = max(allowed_by_abs, allowed_by_pct)
+
+          print(f"Baseline issues: {base}")
+          print(f"Current issues: {total}")
+          print(f"Allowed max: {math.floor(allowed_max)} (abs={allowed_by_abs}, pct={allowed_by_pct:.2f})")
+
+          failures = []
+
+          with open("pa11y-baseline-summary.txt", "w", encoding="utf-8") as out:
+            out.write(f"global.baseline={base}\n")
+            out.write(f"global.current={total}\n")
+            out.write(f"global.allowed_max={math.floor(allowed_max)}\n")
+
+            for url, current in sorted(by_url.items()):
+              cfg = route_baselines.get(url, {})
+              r_base = int(cfg.get("baseline", 0))
+              r_abs = int(cfg.get("allowed_delta_abs", delta_abs))
+              r_pct = float(cfg.get("allowed_delta_pct", delta_pct))
+              r_allowed = max(r_base + r_abs, r_base * (1 + (r_pct / 100.0)))
+              out.write(f"route.url={url}\n")
+              out.write(f"route.baseline={r_base}\n")
+              out.write(f"route.current={current}\n")
+              out.write(f"route.allowed_max={math.floor(r_allowed)}\n")
+              if current > r_allowed:
+                failures.append(f"route regression: {url} ({current} > {math.floor(r_allowed)})")
+
+          if total > allowed_max:
+            failures.append(f"global regression: {total} > {math.floor(allowed_max)}")
+
+          if failures:
+            print("REGRESSION_DETECTED=1")
+            for item in failures:
+              print(item)
+            sys.exit(1)
+          PY
+
+      - name: Publish monitoring summary
+        if: always()
+        run: |
+          echo "## Accessibility Monitoring" >> $GITHUB_STEP_SUMMARY
+          echo "Relatório completo disponível no artefato \`pa11y-monitoring-report\`." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Arquivo: \`pa11y-monitoring-report.json\`" >> $GITHUB_STEP_SUMMARY
+          if [ -f pa11y-baseline-summary.txt ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Baseline Comparison" >> $GITHUB_STEP_SUMMARY
+            cat pa11y-baseline-summary.txt | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload monitoring report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pa11y-monitoring-report
+          path: pa11y-monitoring-report.json
+
+      - name: Upload baseline summary artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pa11y-baseline-summary
+          path: pa11y-baseline-summary.txt

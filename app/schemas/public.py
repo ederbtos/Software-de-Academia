@@ -66,3 +66,36 @@ class TokenOut(BaseModel):
     token_type: str = "bearer"
     role: str
     academia_slug: Optional[str] = None
+
+
+class AuditLogOut(BaseModel):
+    id: int
+    actor_id: Optional[str]
+    actor_scope: Optional[str]
+    actor_role: Optional[str]
+    action: str
+    resource_type: str
+    resource_id: Optional[str]
+    schema_name: Optional[str]
+    details: Optional[str]
+    ip: Optional[str]
+    criado_em: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AuditMetricaItem(BaseModel):
+    chave: str
+    total: int
+
+
+class AuditVolumeDiaItem(BaseModel):
+    dia: str
+    total: int
+
+
+class AuditMetricasOut(BaseModel):
+    total_eventos: int
+    top_acoes: list[AuditMetricaItem]
+    top_atores: list[AuditMetricaItem]
+    volume_diario: list[AuditVolumeDiaItem]

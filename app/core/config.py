@@ -8,8 +8,10 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 480
     superadmin_email: str = "admin@sistema.com"
-    superadmin_password: str = "Admin@123"
+    superadmin_password: str
     base_domain: str = "sistema.com"
+    app_env: str = "dev"
+    csrf_enabled: bool = True
 
     # SMTP
     smtp_host: str = ""

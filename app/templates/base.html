@@ -24,6 +24,26 @@
     }
     * { font-family: 'Inter', sans-serif; }
     body { background: var(--bg); min-height: 100vh; }
+    .skip-link {
+      position: absolute;
+      left: 10px;
+      top: -40px;
+      background: #111827;
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 8px;
+      z-index: 1000;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .skip-link:focus { top: 10px; }
+    a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+      outline: 3px solid #1d4ed8;
+      outline-offset: 2px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+    }
 
     /* ── Sidebar ────────────────────────────── */
     .sidebar {
@@ -249,16 +269,17 @@
   {% block extra_head %}{% endblock %}
 </head>
 <body>
+<a href="#main-content" class="skip-link">Pular para o conteúdo principal</a>
 
 {% if request.cookies.get('access_token') %}
 <!-- ── Sidebar ─────────────────────────────────── -->
-<aside class="sidebar">
+<aside class="sidebar" aria-label="Menu lateral">
   <a href="/dashboard" class="sidebar-brand">
     <div class="brand-icon"><i class="bi bi-activity"></i></div>
     AcademiaSys
   </a>
 
-  <div class="px-3 py-2">
+  <nav class="px-3 py-2" aria-label="Navegação principal">
     <div class="sidebar-section">Principal</div>
     <ul class="nav flex-column">
       <li class="nav-item"><a class="nav-link {% if request.url.path == '/dashboard' %}active{% endif %}" href="/dashboard"><i class="bi bi-speedometer2"></i>Dashboard</a></li>
@@ -287,7 +308,7 @@
       <li class="nav-item"><a class="nav-link {% if '/relatorios' in request.url.path %}active{% endif %}" href="/relatorios"><i class="bi bi-bar-chart-line"></i>Relatórios</a></li>
       <li class="nav-item"><a class="nav-link {% if '/configuracoes' in request.url.path %}active{% endif %}" href="/configuracoes"><i class="bi bi-gear"></i>Configurações</a></li>
     </ul>
-  </div>
+  </nav>
 
   <div class="sidebar-footer">
     <a class="nav-link {% if '/perfil' in request.url.path %}active{% endif %}" href="/perfil"><i class="bi bi-person-circle"></i>Meu Perfil</a>
@@ -297,26 +318,26 @@
 
 <!-- ── Main ──────────────────────────────────── -->
 <div class="layout-main">
-  <header class="topbar">
-    <span class="topbar-title">{% block page_title %}{% endblock %}</span>
+  <header class="topbar" role="banner">
+    <h1 class="topbar-title mb-0" id="page-title">{% block page_title %}{% endblock %}</h1>
     <div class="d-flex align-items-center gap-2">
       {% block topbar_actions %}{% endblock %}
     </div>
   </header>
 
-  <main class="page-body">
+  <main class="page-body" id="main-content" tabindex="-1" role="main" aria-labelledby="page-title">
     {% if success %}
-    <div class="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2 mb-4" role="alert">
+    <div class="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2 mb-4" role="alert" aria-live="polite">
       <i class="bi bi-check-circle-fill fs-5"></i>
       <span>{{ success }}</span>
-      <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+      <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Fechar alerta"></button>
     </div>
     {% endif %}
     {% if error %}
-    <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2 mb-4" role="alert">
+    <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2 mb-4" role="alert" aria-live="assertive">
       <i class="bi bi-exclamation-circle-fill fs-5"></i>
       <span>{{ error }}</span>
-      <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+      <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Fechar alerta"></button>
     </div>
     {% endif %}
 
@@ -326,12 +347,61 @@
 
 {% else %}
 <!-- Sem sidebar (login) -->
-<div class="w-100">
+<main class="w-100" id="main-content" tabindex="-1" role="main">
   {{ self.content() }}
-</div>
+</main>
 {% endif %}
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+function getCookie(name) {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop().split(';').shift();
+  return null;
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  document.querySelectorAll('.sidebar .nav-link.active').forEach(function (link) {
+    link.setAttribute('aria-current', 'page');
+  });
+
+  document.querySelectorAll('i.bi').forEach(function (icon) {
+    icon.setAttribute('aria-hidden', 'true');
+  });
+
+  document.querySelectorAll('button, a, input, select, textarea').forEach(function (el) {
+    const isIconOnly = (el.textContent || '').trim() === '' && el.querySelector('i.bi');
+    if (isIconOnly && !el.getAttribute('aria-label')) {
+      const fallback = el.getAttribute('title') || 'Ação';
+      el.setAttribute('aria-label', fallback);
+    }
+  });
+
+  document.querySelectorAll('label').forEach(function (label) {
+    if (label.htmlFor) return;
+    const input = label.parentElement ? label.parentElement.querySelector('input,select,textarea') : null;
+    if (!input) return;
+    if (!input.id) {
+      const genId = 'field_' + Math.random().toString(36).slice(2, 9);
+      input.id = genId;
+    }
+    label.htmlFor = input.id;
+  });
+
+  const token = getCookie('csrf_token');
+  if (!token) return;
+
+  document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(function (form) {
+    if (form.querySelector('input[name="csrf_token"]')) return;
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'csrf_token';
+    input.value = token;
+    form.appendChild(input);
+  });
+});
+</script>
 {% block extra_scripts %}{% endblock %}
 </body>
 </html>

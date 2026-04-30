@@ -8,6 +8,7 @@ from fastapi.exception_handlers import http_exception_handler
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.csrf import CSRF_COOKIE_NAME, generate_csrf_token, validate_csrf
 from app.core.security import hash_password, create_access_token, verify_password
 from app.db.database import get_db, engine, Base, get_tenant_db
 from app.models.public import UsuarioPublic, UsuarioPublicRole, Academia
@@ -29,11 +30,16 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     _seed_superadmin()
-    from app.core.scheduler import criar_scheduler
-    scheduler = criar_scheduler()
-    scheduler.start()
+    scheduler = None
+    try:
+        from app.core.scheduler import criar_scheduler
+        scheduler = criar_scheduler()
+        scheduler.start()
+    except Exception:
+        scheduler = None
     yield
-    scheduler.shutdown()
+    if scheduler:
+        scheduler.shutdown()
 
 
 def _seed_superadmin():
@@ -57,6 +63,47 @@ def _seed_superadmin():
 
 app = FastAPI(title="Academia System", version="1.0.0", lifespan=lifespan)
 templates = Jinja2Templates(directory="app/templates")
+
+
+def _is_secure_cookie() -> bool:
+    return settings.app_env.lower() in ("prod", "production")
+
+
+def set_auth_cookie(response, token: str):
+    response.set_cookie(
+        "access_token",
+        token,
+        httponly=True,
+        samesite="lax",
+        secure=_is_secure_cookie(),
+        max_age=settings.access_token_expire_minutes * 60,
+        path="/",
+    )
+
+
+def clear_auth_cookie(response):
+    response.delete_cookie("access_token", path="/")
+
+
+@app.middleware("http")
+async def csrf_middleware(request: Request, call_next):
+    if settings.csrf_enabled:
+        is_web = not request.url.path.startswith("/api/")
+        mutating = request.method.upper() in {"POST", "PUT", "PATCH", "DELETE"}
+        if is_web and mutating:
+            await validate_csrf(request)
+
+    response = await call_next(request)
+    if not request.cookies.get(CSRF_COOKIE_NAME):
+        response.set_cookie(
+            CSRF_COOKIE_NAME,
+            generate_csrf_token(),
+            httponly=False,
+            samesite="lax",
+            secure=_is_secure_cookie(),
+            path="/",
+        )
+    return response
 
 import os
 if os.path.isdir("app/static"):
@@ -111,7 +158,7 @@ async def login_form(
         token = create_access_token({"sub": user.id, "scope": "public", "role": user.role.value})
         dest = "/superadmin" if user.role == UsuarioPublicRole.superadmin else "/dashboard"
         resp = RedirectResponse(dest, status_code=302)
-        resp.set_cookie("access_token", token, httponly=True, samesite="lax")
+        set_auth_cookie(resp, token)
         return resp
 
     # Resolve a academia: slug do subdomínio tem prioridade, campo do form é fallback (dev/localhost)
@@ -135,7 +182,7 @@ async def login_form(
                         "schema": academia.schema_name,
                     })
                     resp = RedirectResponse("/dashboard", status_code=302)
-                    resp.set_cookie("access_token", token, httponly=True, samesite="lax")
+                    set_auth_cookie(resp, token)
                     return resp
             finally:
                 tenant_db.close()
@@ -146,7 +193,7 @@ async def login_form(
 @app.get("/auth/logout")
 def logout():
     resp = RedirectResponse("/login", status_code=302)
-    resp.delete_cookie("access_token")
+    clear_auth_cookie(resp)
     return resp
 
 
@@ -481,19 +528,28 @@ async def criar_matricula_form(
 ):
     from app.schemas.tenant import MatriculaCreate
     from app.services.aluno import matricular_aluno
+    from app.services.auditoria import registrar_auditoria
     try:
-        matricular_aluno(MatriculaCreate(aluno_id=aluno_id, plano_id=plano_id,
+        matricula = matricular_aluno(MatriculaCreate(aluno_id=aluno_id, plano_id=plano_id,
             data_inicio=date.fromisoformat(data_inicio), observacoes=observacoes or None), db)
+        registrar_auditoria(
+            request, db, "criar_matricula", "matricula", str(matricula.id),
+            f"aluno_id={aluno_id};plano_id={plano_id}",
+        )
     except Exception:
         pass
     return RedirectResponse(redirect_url, status_code=302)
 
 
 @app.post("/matriculas/{matricula_id}/renovar")
-async def renovar_matricula_form(matricula_id: int, db: Session = Depends(get_tenant_session), _=Depends(get_current_funcionario)):
+async def renovar_matricula_form(
+    request: Request, matricula_id: int, db: Session = Depends(get_tenant_session), _=Depends(get_current_funcionario)
+):
     from app.services.aluno import renovar_matricula
+    from app.services.auditoria import registrar_auditoria
     try:
         renovar_matricula(matricula_id, db)
+        registrar_auditoria(request, db, "renovar_matricula", "matricula", str(matricula_id))
     except Exception:
         pass
     return RedirectResponse("/matriculas", status_code=302)
@@ -509,10 +565,12 @@ async def registrar_pagamento_form(
 ):
     from app.schemas.tenant import PagamentoRegistrar, PagamentoMetodo
     from app.services.aluno import registrar_pagamento
+    from app.services.auditoria import registrar_auditoria
     try:
         dp = date.fromisoformat(data_pagamento) if data_pagamento else None
         registrar_pagamento(pagamento_id, PagamentoRegistrar(
             metodo=PagamentoMetodo(metodo), data_pagamento=dp, observacoes=observacoes or None), db)
+        registrar_auditoria(request, db, "registrar_pagamento", "pagamento", str(pagamento_id), f"metodo={metodo}")
     except Exception:
         pass
     return RedirectResponse(redirect_url, status_code=302)
@@ -974,11 +1032,16 @@ async def criar_funcionario_form(
     db: Session = Depends(get_tenant_session), _=Depends(require_admin),
 ):
     from app.models.tenant import Funcionario, FuncionarioRole
+    from app.services.auditoria import registrar_auditoria
     success = error = None
     try:
-        db.add(Funcionario(nome=nome, email=email, cpf=cpf or None, telefone=telefone or None,
-                           role=FuncionarioRole(role), senha_hash=hash_password(password)))
+        novo = Funcionario(nome=nome, email=email, cpf=cpf or None, telefone=telefone or None,
+                           role=FuncionarioRole(role), senha_hash=hash_password(password))
+        db.add(novo)
         db.commit()
+        registrar_auditoria(
+            request, db, "criar_funcionario", "funcionario", str(novo.id), f"email={email};role={role}"
+        )
         success = "Funcionário criado!"
     except Exception as e:
         error = str(e)
@@ -990,16 +1053,21 @@ async def criar_funcionario_form(
 
 @app.post("/funcionarios/editar")
 async def editar_funcionario_form(
+    request: Request,
     func_id: int = Form(...), nome: str = Form(...),
     telefone: str = Form(None), role: str = Form("recepcionista"), ativo: str = Form("1"),
     db: Session = Depends(get_tenant_session), _=Depends(require_admin),
 ):
     from app.models.tenant import Funcionario, FuncionarioRole
+    from app.services.auditoria import registrar_auditoria
     func = db.query(Funcionario).filter(Funcionario.id == func_id).first()
     if func:
         func.nome = nome; func.telefone = telefone or None
         func.role = FuncionarioRole(role); func.ativo = ativo == "1"
         db.commit()
+        registrar_auditoria(
+            request, db, "editar_funcionario", "funcionario", str(func_id), f"role={role};ativo={ativo}"
+        )
     return RedirectResponse("/funcionarios", status_code=302)
 
 
@@ -1204,7 +1272,284 @@ def exportar_relatorio_csv(db: Session = Depends(get_tenant_session), _=Depends(
 @app.get("/superadmin", response_class=HTMLResponse)
 def superadmin_page(request: Request, db: Session = Depends(get_db), _=Depends(require_superadmin)):
     from app.services.academia import listar_academias
-    return templates.TemplateResponse(request, "superadmin.html", {"academias": listar_academias(db)})
+    from app.core.test_runner import STATE
+    return templates.TemplateResponse(
+        request,
+        "superadmin.html",
+        {"academias": listar_academias(db), "test_status": STATE.snapshot()},
+    )
+
+
+@app.get("/superadmin/auditoria", response_class=HTMLResponse)
+def superadmin_auditoria_page(
+    request: Request,
+    acao: str = None,
+    actor_id: str = None,
+    data_inicio: str = None,
+    data_fim: str = None,
+    ordem: str = "desc",
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    _=Depends(require_superadmin),
+):
+    from app.models.public import AuditLog
+    from datetime import datetime, timedelta
+    from sqlalchemy import func
+
+    limit = max(10, min(limit, 500))
+    offset = max(0, offset)
+    ordem = "asc" if ordem == "asc" else "desc"
+    q = db.query(AuditLog)
+    if acao:
+        q = q.filter(AuditLog.action.ilike(f"%{acao}%"))
+    if actor_id:
+        q = q.filter(AuditLog.actor_id == actor_id)
+    if data_inicio:
+        q = q.filter(AuditLog.criado_em >= datetime.fromisoformat(data_inicio))
+    if data_fim:
+        q = q.filter(AuditLog.criado_em < (datetime.fromisoformat(data_fim) + timedelta(days=1)))
+    order_col = AuditLog.criado_em.asc() if ordem == "asc" else AuditLog.criado_em.desc()
+    rows = q.order_by(order_col).offset(offset).limit(limit + 1).all()
+    has_next = len(rows) > limit
+    logs = rows[:limit]
+    has_prev = offset > 0
+
+    # Métricas operacionais (considerando o mesmo recorte de filtro, sem paginação)
+    q_metrics = db.query(AuditLog)
+    if acao:
+        q_metrics = q_metrics.filter(AuditLog.action.ilike(f"%{acao}%"))
+    if actor_id:
+        q_metrics = q_metrics.filter(AuditLog.actor_id == actor_id)
+    if data_inicio:
+        q_metrics = q_metrics.filter(AuditLog.criado_em >= datetime.fromisoformat(data_inicio))
+    if data_fim:
+        q_metrics = q_metrics.filter(AuditLog.criado_em < (datetime.fromisoformat(data_fim) + timedelta(days=1)))
+
+    total_eventos = q_metrics.count()
+
+    top_acoes = (
+        q_metrics.with_entities(AuditLog.action, func.count(AuditLog.id).label("total"))
+        .group_by(AuditLog.action)
+        .order_by(func.count(AuditLog.id).desc())
+        .limit(5)
+        .all()
+    )
+
+    top_atores = (
+        q_metrics.with_entities(AuditLog.actor_id, func.count(AuditLog.id).label("total"))
+        .filter(AuditLog.actor_id.isnot(None))
+        .group_by(AuditLog.actor_id)
+        .order_by(func.count(AuditLog.id).desc())
+        .limit(5)
+        .all()
+    )
+
+    volume_diario = (
+        q_metrics.with_entities(func.date(AuditLog.criado_em).label("dia"), func.count(AuditLog.id).label("total"))
+        .group_by(func.date(AuditLog.criado_em))
+        .order_by(func.date(AuditLog.criado_em).desc())
+        .limit(7)
+        .all()
+    )
+    volume_diario = list(reversed(volume_diario))
+
+    return templates.TemplateResponse(
+        request,
+        "superadmin_auditoria.html",
+        {
+            "logs": logs,
+            "acao": acao or "",
+            "actor_id": actor_id or "",
+            "data_inicio": data_inicio or "",
+            "data_fim": data_fim or "",
+            "ordem": ordem,
+            "limit": limit,
+            "offset": offset,
+            "has_prev": has_prev,
+            "has_next": has_next,
+            "prev_offset": max(0, offset - limit),
+            "next_offset": offset + limit,
+            "total_eventos": total_eventos,
+            "top_acoes": top_acoes,
+            "top_atores": top_atores,
+            "volume_diario": volume_diario,
+        },
+    )
+
+
+@app.get("/superadmin/auditoria/exportar-csv")
+def superadmin_auditoria_exportar_csv(
+    acao: str = None,
+    actor_id: str = None,
+    data_inicio: str = None,
+    data_fim: str = None,
+    ordem: str = "desc",
+    limit: int = 500,
+    db: Session = Depends(get_db),
+    _=Depends(require_superadmin),
+):
+    import csv
+    import io
+    from datetime import datetime, timedelta
+    from app.models.public import AuditLog
+
+    limit = max(10, min(limit, 2000))
+    ordem = "asc" if ordem == "asc" else "desc"
+    q = db.query(AuditLog)
+    if acao:
+        q = q.filter(AuditLog.action.ilike(f"%{acao}%"))
+    if actor_id:
+        q = q.filter(AuditLog.actor_id == actor_id)
+    if data_inicio:
+        q = q.filter(AuditLog.criado_em >= datetime.fromisoformat(data_inicio))
+    if data_fim:
+        q = q.filter(AuditLog.criado_em < (datetime.fromisoformat(data_fim) + timedelta(days=1)))
+    order_col = AuditLog.criado_em.asc() if ordem == "asc" else AuditLog.criado_em.desc()
+    logs = q.order_by(order_col).limit(limit).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "id",
+            "criado_em",
+            "action",
+            "resource_type",
+            "resource_id",
+            "actor_id",
+            "actor_scope",
+            "actor_role",
+            "schema_name",
+            "ip",
+            "details",
+        ]
+    )
+    for l in logs:
+        writer.writerow(
+            [
+                l.id,
+                l.criado_em.isoformat() if l.criado_em else "",
+                l.action,
+                l.resource_type,
+                l.resource_id or "",
+                l.actor_id or "",
+                l.actor_scope or "",
+                l.actor_role or "",
+                l.schema_name or "",
+                l.ip or "",
+                l.details or "",
+            ]
+        )
+
+    output.seek(0)
+    filename = f"auditoria_{date.today().isoformat()}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@app.get("/superadmin/auditoria/exportar-metricas-csv")
+def superadmin_auditoria_exportar_metricas_csv(
+    acao: str = None,
+    actor_id: str = None,
+    data_inicio: str = None,
+    data_fim: str = None,
+    db: Session = Depends(get_db),
+    _=Depends(require_superadmin),
+):
+    import csv
+    import io
+    from datetime import datetime, timedelta
+    from sqlalchemy import func
+    from app.models.public import AuditLog
+
+    q = db.query(AuditLog)
+    if acao:
+        q = q.filter(AuditLog.action.ilike(f"%{acao}%"))
+    if actor_id:
+        q = q.filter(AuditLog.actor_id == actor_id)
+    if data_inicio:
+        q = q.filter(AuditLog.criado_em >= datetime.fromisoformat(data_inicio))
+    if data_fim:
+        q = q.filter(AuditLog.criado_em < (datetime.fromisoformat(data_fim) + timedelta(days=1)))
+
+    total_eventos = q.count()
+    top_acoes = (
+        q.with_entities(AuditLog.action, func.count(AuditLog.id).label("total"))
+        .group_by(AuditLog.action)
+        .order_by(func.count(AuditLog.id).desc())
+        .limit(10)
+        .all()
+    )
+    top_atores = (
+        q.with_entities(AuditLog.actor_id, func.count(AuditLog.id).label("total"))
+        .filter(AuditLog.actor_id.isnot(None))
+        .group_by(AuditLog.actor_id)
+        .order_by(func.count(AuditLog.id).desc())
+        .limit(10)
+        .all()
+    )
+    volume_diario = (
+        q.with_entities(func.date(AuditLog.criado_em).label("dia"), func.count(AuditLog.id).label("total"))
+        .group_by(func.date(AuditLog.criado_em))
+        .order_by(func.date(AuditLog.criado_em).desc())
+        .limit(30)
+        .all()
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow(["RESUMO", "valor"])
+    writer.writerow(["total_eventos", total_eventos])
+    writer.writerow([])
+
+    writer.writerow(["TOP_ACOES", "total"])
+    for a in top_acoes:
+        writer.writerow([a[0], int(a[1])])
+    writer.writerow([])
+
+    writer.writerow(["TOP_ATORES", "total"])
+    for a in top_atores:
+        writer.writerow([a[0], int(a[1])])
+    writer.writerow([])
+
+    writer.writerow(["VOLUME_DIARIO", "total"])
+    for v in reversed(volume_diario):
+        writer.writerow([v[0], int(v[1])])
+
+    output.seek(0)
+    filename = f"auditoria_metricas_{date.today().isoformat()}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@app.post("/superadmin/tests/run")
+def superadmin_run_tests(request: Request, db: Session = Depends(get_db), _=Depends(require_superadmin)):
+    from app.core.test_runner import STATE, start_test_run
+    from app.services.academia import listar_academias
+    from app.services.auditoria import registrar_auditoria
+    started = start_test_run()
+    if started:
+        registrar_auditoria(request, db, "executar_testes", "suite_testes")
+    msg = "Execução da suite iniciada." if started else "Já existe uma execução em andamento."
+    return templates.TemplateResponse(
+        request,
+        "superadmin.html",
+        {"academias": listar_academias(db), "success": msg, "test_status": STATE.snapshot()},
+    )
+
+
+@app.get("/superadmin/tests/status")
+def superadmin_tests_status(_=Depends(require_superadmin)):
+    from app.core.test_runner import STATE
+    return STATE.snapshot()
 
 
 @app.post("/superadmin/academias/form")
@@ -1218,6 +1563,7 @@ async def criar_academia_form(
 ):
     from app.schemas.public import AcademiaCreate
     from app.services.academia import criar_academia, listar_academias
+    from app.services.auditoria import registrar_auditoria
     try:
         academia = criar_academia(AcademiaCreate(nome=nome, slug=slug, cnpj=cnpj or None,
                                       telefone=telefone or None, email=email or None,
@@ -1235,6 +1581,7 @@ async def criar_academia_form(
                 tenant_db.commit()
             finally:
                 tenant_db.close()
+        registrar_auditoria(request, db, "criar_academia", "academia", str(academia.id), f"slug={slug}")
         return templates.TemplateResponse(request, "superadmin.html", {"academias": listar_academias(db), "success": f"Academia '{nome}' criada!"})
     except Exception as e:
         return templates.TemplateResponse(request, "superadmin.html", {"academias": listar_academias(db), "error": str(e)})
@@ -1253,11 +1600,13 @@ async def editar_academia_form(
 ):
     from app.schemas.public import AcademiaUpdate
     from app.services.academia import atualizar_academia, listar_academias
+    from app.services.auditoria import registrar_auditoria
     try:
         atualizar_academia(academia_id, AcademiaUpdate(
             nome=nome, cnpj=cnpj or None, telefone=telefone or None,
             email=email or None, endereco=endereco or None,
         ), db)
+        registrar_auditoria(request, db, "editar_academia", "academia", str(academia_id))
         return templates.TemplateResponse(request, "superadmin.html", {"academias": listar_academias(db), "success": "Academia atualizada!"})
     except Exception as e:
         return templates.TemplateResponse(request, "superadmin.html", {"academias": listar_academias(db), "error": str(e)})
@@ -1270,7 +1619,9 @@ async def ativar_academia_form(
 ):
     from app.schemas.public import AcademiaUpdate, AcademiaStatus
     from app.services.academia import atualizar_academia, listar_academias
+    from app.services.auditoria import registrar_auditoria
     atualizar_academia(academia_id, AcademiaUpdate(status=AcademiaStatus.ativa), db)
+    registrar_auditoria(request, db, "ativar_academia", "academia", str(academia_id))
     return templates.TemplateResponse(request, "superadmin.html", {"academias": listar_academias(db), "success": "Academia ativada!"})
 
 
@@ -1281,5 +1632,7 @@ async def desativar_academia_form(
 ):
     from app.schemas.public import AcademiaUpdate, AcademiaStatus
     from app.services.academia import atualizar_academia, listar_academias
+    from app.services.auditoria import registrar_auditoria
     atualizar_academia(academia_id, AcademiaUpdate(status=AcademiaStatus.inativa), db)
+    registrar_auditoria(request, db, "desativar_academia", "academia", str(academia_id))
     return templates.TemplateResponse(request, "superadmin.html", {"academias": listar_academias(db), "success": "Academia desativada!"})

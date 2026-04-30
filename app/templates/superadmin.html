@@ -2,7 +2,15 @@
 {% block title %}Superadmin — Academias{% endblock %}
 {% block page_title %}<i class="bi bi-building me-2" style="color:#6366f1;"></i>Painel Superadmin{% endblock %}
 {% block topbar_actions %}
-  <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovaAcademia">
+  <a href="/superadmin/auditoria" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-shield-check me-1"></i>Auditoria
+  </a>
+  <form method="post" action="/superadmin/tests/run" class="m-0">
+    <button class="btn btn-outline-dark btn-sm" type="submit">
+      <i class="bi bi-play-circle me-1"></i>Executar Testes
+    </button>
+  </form>
+  <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovaAcademia" aria-label="Abrir formulário de nova academia">
     <i class="bi bi-plus-lg me-1"></i>Nova Academia
   </button>
 {% endblock %}
@@ -17,6 +25,24 @@
 {% if error %}
 <div class="alert alert-danger d-flex align-items-center gap-2 mb-3" style="border-radius:10px;">
   <i class="bi bi-exclamation-circle-fill"></i><span>{{ error }}</span>
+</div>
+{% endif %}
+
+{% if test_status %}
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <strong>Status da suíte de testes</strong>
+      <span class="badge {% if test_status.running %}bg-warning text-dark{% elif test_status.return_code == 0 %}bg-success{% elif test_status.return_code is not none %}bg-danger{% else %}bg-secondary{% endif %}">
+        {% if test_status.running %}Em execução{% elif test_status.return_code == 0 %}Sucesso{% elif test_status.return_code is not none %}Falhou{% else %}Não executado{% endif %}
+      </span>
+    </div>
+    <div class="small text-muted mb-2">
+      Início: {{ test_status.started_at or '-' }} | Fim: {{ test_status.finished_at or '-' }}
+    </div>
+    <pre class="p-2 mb-0" style="max-height:220px;overflow:auto;background:#0f172a;color:#e2e8f0;border-radius:8px;font-size:.75rem;">{% for line in test_status.logs[-30:] %}{{ line }}
+{% endfor %}</pre>
+  </div>
 </div>
 {% endif %}
 
@@ -63,14 +89,14 @@
           </button>
           {% if a.status.value == 'ativa' %}
           <form method="post" action="/superadmin/academias/{{ a.id }}/desativar" class="m-0">
-            <button type="submit" class="btn btn-outline-warning btn-sm"
+            <button type="submit" class="btn btn-outline-warning btn-sm" aria-label="Desativar academia {{ a.nome }}"
                     onclick="return confirm('Desativar {{ a.nome }}?')">
               <i class="bi bi-pause-circle"></i>
             </button>
           </form>
           {% else %}
           <form method="post" action="/superadmin/academias/{{ a.id }}/ativar" class="m-0">
-            <button type="submit" class="btn btn-outline-success btn-sm"
+            <button type="submit" class="btn btn-outline-success btn-sm" aria-label="Ativar academia {{ a.nome }}"
                     onclick="return confirm('Ativar {{ a.nome }}?')">
               <i class="bi bi-play-circle"></i>
             </button>
@@ -87,7 +113,7 @@
   <div class="empty-state">
     <i class="bi bi-building"></i>
     <p>Nenhuma academia cadastrada.</p>
-    <button class="btn btn-primary btn-sm mt-2" data-bs-toggle="modal" data-bs-target="#modalNovaAcademia">
+    <button class="btn btn-primary btn-sm mt-2" data-bs-toggle="modal" data-bs-target="#modalNovaAcademia" aria-label="Criar primeira academia">
       <i class="bi bi-plus me-1"></i>Criar primeira academia
     </button>
   </div>
@@ -100,7 +126,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title"><i class="bi bi-building-add me-2"></i>Nova Academia</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar modal"></button>
       </div>
       <form method="post" action="/superadmin/academias/form">
         <div class="modal-body">
@@ -160,7 +186,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Editar Academia</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar modal"></button>
       </div>
       <form id="formEditar" method="post" action="">
         <div class="modal-body">
