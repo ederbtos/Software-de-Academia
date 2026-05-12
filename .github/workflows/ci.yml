@@ -22,9 +22,16 @@ jobs:
           pip install -r requirements.txt
           pip install pytest
 
-      - name: Run tests
+      - name: Run core test suite
         env:
           database_url: sqlite:///./ci.db
           secret_key: ci-secret-key
           superadmin_password: ci-superadmin-password
         run: pytest -q tests
+
+      - name: Run critical E2E flows
+        env:
+          database_url: sqlite:///./ci.db
+          secret_key: ci-secret-key
+          superadmin_password: ci-superadmin-password
+        run: pytest -q tests/test_e2e_critical_flows.py

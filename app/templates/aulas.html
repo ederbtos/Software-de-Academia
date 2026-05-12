@@ -79,6 +79,11 @@
               </button>
             </form>
           </div>
+          {% set aud = alteracoes_aula.get(aula.id|string, []) if alteracoes_aula else [] %}
+          <div class="mt-2 p-2 rounded" style="background:#fff;font-size:.72rem;border:1px dashed #e2e8f0;">
+            <div><span class="text-muted">Última:</span> {% if aud|length > 0 %}<code>{{ aud[0].action }}</code> {{ aud[0].criado_em.strftime("%d/%m %H:%M") }}{% else %}—{% endif %}</div>
+            <div><span class="text-muted">Penúltima:</span> {% if aud|length > 1 %}<code>{{ aud[1].action }}</code> {{ aud[1].criado_em.strftime("%d/%m %H:%M") }}{% else %}—{% endif %}</div>
+          </div>
         </div>
         {% endfor %}
       </div>

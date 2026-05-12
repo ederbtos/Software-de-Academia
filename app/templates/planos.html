@@ -37,6 +37,11 @@
         <div class="text-muted" style="font-size:.8rem;">
           <i class="bi bi-calendar3 me-1"></i>{{ plano.duracao_dias }} dias de vigência
         </div>
+        {% set aud = alteracoes_plano.get(plano.id|string, []) if alteracoes_plano else [] %}
+        <div class="mt-2 p-2 rounded" style="background:#f8fafc;font-size:.73rem;">
+          <div><span class="text-muted">Última:</span> {% if aud|length > 0 %}<code>{{ aud[0].action }}</code> em {{ aud[0].criado_em.strftime("%d/%m %H:%M") }}{% else %}—{% endif %}</div>
+          <div><span class="text-muted">Penúltima:</span> {% if aud|length > 1 %}<code>{{ aud[1].action }}</code> em {{ aud[1].criado_em.strftime("%d/%m %H:%M") }}{% else %}—{% endif %}</div>
+        </div>
 
         <!-- Ações -->
         <div class="d-flex gap-2 mt-4">

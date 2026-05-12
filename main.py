@@ -1,10 +1,12 @@
 from contextlib import asynccontextmanager
 from datetime import date
+from time import perf_counter
 from fastapi import FastAPI, Request, Depends, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.exception_handlers import http_exception_handler
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -104,6 +106,29 @@ async def csrf_middleware(request: Request, call_next):
             path="/",
         )
     return response
+
+
+@app.middleware("http")
+async def access_log_middleware(request: Request, call_next):
+    from app.services.auditoria import registrar_acesso
+
+    started = perf_counter()
+    response = None
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        # Evita ruído e custo com assets estáticos.
+        if request.url.path.startswith("/static/"):
+            return
+        elapsed_ms = int((perf_counter() - started) * 1000)
+        db = next(get_db())
+        try:
+            registrar_acesso(request, db, status_code=status_code, duration_ms=elapsed_ms)
+        finally:
+            db.close()
 
 import os
 if os.path.isdir("app/static"):
@@ -382,11 +407,13 @@ async def criar_aluno_form(
 ):
     from app.schemas.tenant import AlunoCreate
     from app.services.aluno import criar_aluno, listar_alunos
+    from app.services.auditoria import registrar_auditoria
     try:
         dn = date.fromisoformat(data_nascimento) if data_nascimento else None
-        criar_aluno(AlunoCreate(nome=nome, email=email or None, cpf=cpf or None, telefone=telefone or None,
-                                data_nascimento=dn, sexo=sexo or None, endereco=endereco or None,
-                                observacoes=observacoes or None), db)
+        aluno = criar_aluno(AlunoCreate(nome=nome, email=email or None, cpf=cpf or None, telefone=telefone or None,
+                           data_nascimento=dn, sexo=sexo or None, endereco=endereco or None,
+                           observacoes=observacoes or None), db)
+        registrar_auditoria(request, db, "criar_aluno", "aluno", str(aluno.id), f"email={email or ''}")
         return templates.TemplateResponse(request, "alunos.html", {"alunos": listar_alunos(db, False), "success": "Aluno cadastrado!"})
     except Exception as e:
         return templates.TemplateResponse(request, "alunos.html", {"alunos": listar_alunos(db, False), "error": str(e)})
@@ -396,6 +423,7 @@ async def criar_aluno_form(
 def aluno_detalhe_page(request: Request, aluno_id: int, db: Session = Depends(get_tenant_session), _=Depends(get_current_funcionario)):
     from app.services.aluno import buscar_aluno
     from app.services.treino import listar_treinos_aluno, listar_presencas_aluno, listar_avaliacoes_aluno
+    from app.services.auditoria import obter_ultimas_alteracoes
     from app.models.tenant import Matricula, Pagamento, Plano, MatriculaStatus
 
     aluno = buscar_aluno(aluno_id, db)
@@ -409,6 +437,7 @@ def aluno_detalhe_page(request: Request, aluno_id: int, db: Session = Depends(ge
             .filter(Pagamento.matricula_id == matricula_ativa.id)
             .order_by(Pagamento.data_vencimento.desc()).first())
 
+    alteracoes = obter_ultimas_alteracoes(db, "aluno", str(aluno_id), limit=2)
     return templates.TemplateResponse(request, "aluno_detalhe.html", {
         "aluno": aluno,
         "treinos": listar_treinos_aluno(aluno_id, db),
@@ -416,6 +445,8 @@ def aluno_detalhe_page(request: Request, aluno_id: int, db: Session = Depends(ge
         "avaliacoes": listar_avaliacoes_aluno(aluno_id, db),
         "planos": planos, "matricula_ativa": matricula_ativa,
         "ultimo_pagamento": ultimo_pagamento, "hoje": date.today().isoformat(),
+        "ultima_alteracao": alteracoes[0] if len(alteracoes) > 0 else None,
+        "penultima_alteracao": alteracoes[1] if len(alteracoes) > 1 else None,
     })
 
 
@@ -429,11 +460,13 @@ async def editar_aluno_form(
 ):
     from app.schemas.tenant import AlunoUpdate
     from app.services.aluno import atualizar_aluno
+    from app.services.auditoria import registrar_auditoria
     try:
         dn = date.fromisoformat(data_nascimento) if data_nascimento else None
         atualizar_aluno(aluno_id, AlunoUpdate(nome=nome, email=email or None, telefone=telefone or None,
             data_nascimento=dn, sexo=sexo or None, endereco=endereco or None,
             observacoes=observacoes or None, ativo=ativo == "1"), db)
+        registrar_auditoria(request, db, "editar_aluno", "aluno", str(aluno_id), f"ativo={ativo}")
     except Exception:
         pass
     return RedirectResponse(f"/alunos/{aluno_id}", status_code=302)
@@ -498,6 +531,7 @@ async def checkin_form(
 def matriculas_page(request: Request, busca: str = None, status: str = None,
                     db: Session = Depends(get_tenant_session), _=Depends(get_current_funcionario)):
     from app.models.tenant import Matricula, Pagamento, Aluno, MatriculaStatus
+    from app.services.auditoria import obter_ultimas_alteracoes_por_recursos
     from sqlalchemy.orm import joinedload
 
     q = db.query(Matricula).options(joinedload(Matricula.plano), joinedload(Matricula.aluno))
@@ -511,10 +545,12 @@ def matriculas_page(request: Request, busca: str = None, status: str = None,
         pag = (db.query(Pagamento).filter(Pagamento.matricula_id == m.id)
                .order_by(Pagamento.data_vencimento.desc()).first())
         rows.append({"matricula": m, "aluno_nome": m.aluno.nome if m.aluno else "—", "ultimo_pag": pag})
+    alteracoes = obter_ultimas_alteracoes_por_recursos(db, "matricula", [str(r["matricula"].id) for r in rows])
 
     return templates.TemplateResponse(request, "matriculas.html", {
         "matriculas": rows,
         "busca": busca, "status_filtro": status, "hoje": date.today(),
+        "alteracoes_matricula": alteracoes,
     })
 
 
@@ -583,8 +619,12 @@ async def registrar_pagamento_form(
 @app.get("/planos", response_class=HTMLResponse)
 def planos_page(request: Request, db: Session = Depends(get_tenant_session), _=Depends(get_current_funcionario)):
     from app.models.tenant import Plano
+    from app.services.auditoria import obter_ultimas_alteracoes_por_recursos
+    planos = db.query(Plano).order_by(Plano.nome).all()
+    alteracoes = obter_ultimas_alteracoes_por_recursos(db, "plano", [str(p.id) for p in planos])
     return templates.TemplateResponse(request, "planos.html", {
-        "planos": db.query(Plano).order_by(Plano.nome).all()
+        "planos": planos,
+        "alteracoes_plano": alteracoes,
     })
 
 
@@ -596,11 +636,14 @@ async def criar_plano_form(
     db: Session = Depends(get_tenant_session), _=Depends(require_admin),
 ):
     from app.models.tenant import Plano
+    from app.services.auditoria import registrar_auditoria
     from decimal import Decimal
     success = error = None
     try:
-        db.add(Plano(nome=nome, descricao=descricao or None, valor=Decimal(valor), duracao_dias=duracao_dias))
+        plano = Plano(nome=nome, descricao=descricao or None, valor=Decimal(valor), duracao_dias=duracao_dias)
+        db.add(plano)
         db.commit()
+        registrar_auditoria(request, db, "criar_plano", "plano", str(plano.id), f"nome={nome}")
         success = f"Plano '{nome}' criado!"
     except Exception as e:
         error = str(e)
@@ -612,33 +655,44 @@ async def criar_plano_form(
 
 @app.post("/planos/editar")
 async def editar_plano_form(
+    request: Request,
     plano_id: int = Form(...), nome: str = Form(...), descricao: str = Form(None),
     valor: str = Form(...), duracao_dias: int = Form(30),
     db: Session = Depends(get_tenant_session), _=Depends(require_admin),
 ):
     from app.models.tenant import Plano
+    from app.services.auditoria import registrar_auditoria
     from decimal import Decimal
     plano = db.query(Plano).filter(Plano.id == plano_id).first()
     if plano:
         plano.nome = nome; plano.descricao = descricao or None
         plano.valor = Decimal(valor); plano.duracao_dias = duracao_dias
         db.commit()
+        registrar_auditoria(request, db, "editar_plano", "plano", str(plano_id), f"nome={nome}")
     return RedirectResponse("/planos", status_code=302)
 
 
 @app.post("/planos/{plano_id}/ativar")
-async def ativar_plano(plano_id: int, db: Session = Depends(get_tenant_session), _=Depends(require_admin)):
+async def ativar_plano(request: Request, plano_id: int, db: Session = Depends(get_tenant_session), _=Depends(require_admin)):
     from app.models.tenant import Plano
+    from app.services.auditoria import registrar_auditoria
     plano = db.query(Plano).filter(Plano.id == plano_id).first()
-    if plano: plano.ativo = True; db.commit()
+    if plano:
+        plano.ativo = True
+        db.commit()
+        registrar_auditoria(request, db, "ativar_plano", "plano", str(plano_id))
     return RedirectResponse("/planos", status_code=302)
 
 
 @app.post("/planos/{plano_id}/desativar")
-async def desativar_plano(plano_id: int, db: Session = Depends(get_tenant_session), _=Depends(require_admin)):
+async def desativar_plano(request: Request, plano_id: int, db: Session = Depends(get_tenant_session), _=Depends(require_admin)):
     from app.models.tenant import Plano
+    from app.services.auditoria import registrar_auditoria
     plano = db.query(Plano).filter(Plano.id == plano_id).first()
-    if plano: plano.ativo = False; db.commit()
+    if plano:
+        plano.ativo = False
+        db.commit()
+        registrar_auditoria(request, db, "desativar_plano", "plano", str(plano_id))
     return RedirectResponse("/planos", status_code=302)
 
 
@@ -680,6 +734,7 @@ def treino_novo_page(request: Request, aluno_id: str = None,
 async def criar_treino_form(request: Request, db: Session = Depends(get_tenant_session), _=Depends(require_professor_or_admin)):
     from app.schemas.tenant import TreinoCreate, TreinoExercicioCreate
     from app.services.treino import criar_treino, listar_exercicios
+    from app.services.auditoria import registrar_auditoria
     from app.services.aluno import listar_alunos
     from app.models.tenant import Funcionario, FuncionarioRole
     form = await request.form()
@@ -706,6 +761,7 @@ async def criar_treino_form(request: Request, db: Session = Depends(get_tenant_s
             data_validade=date.fromisoformat(form["data_validade"]) if form.get("data_validade") else None,
             exercicios=exercicios,
         ), db)
+        registrar_auditoria(request, db, "criar_treino", "treino", str(treino.id))
         return RedirectResponse(f"/treinos/{treino.id}", status_code=302)
     except Exception as e:
         professores = db.query(Funcionario).filter(
@@ -721,8 +777,12 @@ async def criar_treino_form(request: Request, db: Session = Depends(get_tenant_s
 def treino_detalhe_page(request: Request, treino_id: int,
                         db: Session = Depends(get_tenant_session), _=Depends(get_current_funcionario)):
     from app.services.treino import buscar_treino
+    from app.services.auditoria import obter_ultimas_alteracoes
+    alteracoes = obter_ultimas_alteracoes(db, "treino", str(treino_id), limit=2)
     return templates.TemplateResponse(request, "treino_detalhe.html", {
         "treino": buscar_treino(treino_id, db), "hoje": date.today(),
+        "ultima_alteracao": alteracoes[0] if len(alteracoes) > 0 else None,
+        "penultima_alteracao": alteracoes[1] if len(alteracoes) > 1 else None,
     })
 
 
@@ -748,6 +808,7 @@ async def editar_treino_form(request: Request, treino_id: int,
                               db: Session = Depends(get_tenant_session), _=Depends(require_professor_or_admin)):
     from app.services.treino import atualizar_treino, listar_exercicios
     from app.services.aluno import listar_alunos
+    from app.services.auditoria import registrar_auditoria
     from app.models.tenant import Funcionario, FuncionarioRole
     form = await request.form()
     try:
@@ -774,6 +835,7 @@ async def editar_treino_form(request: Request, treino_id: int,
             "data_validade": date.fromisoformat(form["data_validade"]) if form.get("data_validade") else None,
         }
         atualizar_treino(treino_id, treino_data, exercicios, db)
+        registrar_auditoria(request, db, "editar_treino", "treino", str(treino_id))
         return RedirectResponse(f"/treinos/{treino_id}", status_code=302)
     except Exception as e:
         from app.services.treino import buscar_treino
@@ -787,11 +849,13 @@ async def editar_treino_form(request: Request, treino_id: int,
 
 
 @app.post("/treinos/{treino_id}/desativar")
-async def desativar_treino_form(treino_id: int,
+async def desativar_treino_form(request: Request, treino_id: int,
                                  db: Session = Depends(get_tenant_session), _=Depends(require_professor_or_admin)):
     from app.services.treino import desativar_treino
+    from app.services.auditoria import registrar_auditoria
     try:
         t = desativar_treino(treino_id, db)
+        registrar_auditoria(request, db, "desativar_treino", "treino", str(treino_id))
         return RedirectResponse(f"/alunos/{t.aluno_id}", status_code=302)
     except Exception:
         return RedirectResponse("/treinos", status_code=302)
@@ -826,13 +890,17 @@ def avaliacao_nova_page(request: Request, aluno_id: str = None,
 def avaliacao_detalhe_page(request: Request, av_id: int,
                             db: Session = Depends(get_tenant_session), _=Depends(get_current_funcionario)):
     from app.models.tenant import AvaliacaoFisica, Aluno
+    from app.services.auditoria import obter_ultimas_alteracoes
     av = db.query(AvaliacaoFisica).filter(AvaliacaoFisica.id == av_id).first()
     if not av:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Avaliação não encontrada")
     aluno = db.query(Aluno).filter(Aluno.id == av.aluno_id).first()
+    alteracoes = obter_ultimas_alteracoes(db, "avaliacao", str(av_id), limit=2)
     return templates.TemplateResponse(request, "avaliacao_detalhe.html", {
         "avaliacao": av, "aluno_nome": aluno.nome if aluno else "—",
+        "ultima_alteracao": alteracoes[0] if len(alteracoes) > 0 else None,
+        "penultima_alteracao": alteracoes[1] if len(alteracoes) > 1 else None,
     })
 
 
@@ -840,6 +908,7 @@ def avaliacao_detalhe_page(request: Request, av_id: int,
 async def criar_avaliacao_form(request: Request, db: Session = Depends(get_tenant_session), _=Depends(require_professor_or_admin)):
     from app.schemas.tenant import AvaliacaoCreate
     from app.services.treino import criar_avaliacao
+    from app.services.auditoria import registrar_auditoria
     from app.services.aluno import listar_alunos
     from decimal import Decimal
 
@@ -856,6 +925,7 @@ async def criar_avaliacao_form(request: Request, db: Session = Depends(get_tenan
             panturrilha_dir=_d(form.get("panturrilha_dir")), panturrilha_esq=_d(form.get("panturrilha_esq")),
             observacoes=form.get("observacoes") or None,
         ), db)
+        registrar_auditoria(request, db, "criar_avaliacao", "avaliacao", str(av.id))
         return RedirectResponse(f"/alunos/{av.aluno_id}#tabAvaliacoes", status_code=302)
     except Exception as e:
         return templates.TemplateResponse(request, "avaliacao_nova.html", {
@@ -872,6 +942,7 @@ async def editar_avaliacao_form(
     from app.models.tenant import AvaliacaoFisica
     from decimal import Decimal
     from app.services.treino import calcular_imc
+    from app.services.auditoria import registrar_auditoria
 
     def _d(v): return Decimal(v) if v else None
     form = await request.form()
@@ -895,19 +966,22 @@ async def editar_avaliacao_form(
         if av.peso_kg and av.altura_cm:
             av.imc = round(float(av.peso_kg) / ((float(av.altura_cm) / 100) ** 2), 1)
         db.commit()
+        registrar_auditoria(request, db, "editar_avaliacao", "avaliacao", str(av_id))
     return RedirectResponse(f"/avaliacoes/{av_id}", status_code=302)
 
 
 @app.post("/avaliacoes/{av_id}/deletar")
 async def deletar_avaliacao_form(
-    av_id: int, db: Session = Depends(get_tenant_session), _=Depends(require_professor_or_admin),
+    request: Request, av_id: int, db: Session = Depends(get_tenant_session), _=Depends(require_professor_or_admin),
 ):
     from app.models.tenant import AvaliacaoFisica
+    from app.services.auditoria import registrar_auditoria
     av = db.query(AvaliacaoFisica).filter(AvaliacaoFisica.id == av_id).first()
     aluno_id = av.aluno_id if av else None
     if av:
         db.delete(av)
         db.commit()
+        registrar_auditoria(request, db, "deletar_avaliacao", "avaliacao", str(av_id))
     return RedirectResponse(f"/alunos/{aluno_id}#tabAvaliacoes" if aluno_id else "/avaliacoes", status_code=302)
 
 
@@ -918,6 +992,7 @@ async def deletar_avaliacao_form(
 @app.get("/aulas", response_class=HTMLResponse)
 def aulas_page(request: Request, db: Session = Depends(get_tenant_session), _=Depends(get_current_funcionario)):
     from app.models.tenant import Aula, InscricaoAula, InscricaoStatus, Funcionario, Aluno
+    from app.services.auditoria import obter_ultimas_alteracoes_por_recursos
     from sqlalchemy import func as sqlfunc
     from sqlalchemy.orm import joinedload
 
@@ -925,11 +1000,13 @@ def aulas_page(request: Request, db: Session = Depends(get_tenant_session), _=De
     for aula in aulas:
         aula.inscricoes_confirmadas = db.query(sqlfunc.count(InscricaoAula.id)).filter(
             InscricaoAula.aula_id == aula.id, InscricaoAula.status == InscricaoStatus.confirmada).scalar()
+    alteracoes = obter_ultimas_alteracoes_por_recursos(db, "aula", [str(a.id) for a in aulas])
 
     return templates.TemplateResponse(request, "aulas.html", {
         "aulas": aulas,
         "professores": db.query(Funcionario).filter(Funcionario.ativo == True).all(),
         "alunos": db.query(Aluno).filter(Aluno.ativo == True).order_by(Aluno.nome).all(),
+        "alteracoes_aula": alteracoes,
     })
 
 
@@ -943,10 +1020,12 @@ async def criar_aula_form(
 ):
     from app.schemas.tenant import AulaCreate, DiaSemana
     from app.services.aula import criar_aula
+    from app.services.auditoria import registrar_auditoria
     try:
-        criar_aula(AulaCreate(nome=nome, professor_id=int(professor_id) if professor_id else None,
+        aula = criar_aula(AulaCreate(nome=nome, professor_id=int(professor_id) if professor_id else None,
             dia_semana=DiaSemana(dia_semana), horario_inicio=horario_inicio,
             horario_fim=horario_fim, capacidade_maxima=capacidade_maxima), db)
+        registrar_auditoria(request, db, "criar_aula", "aula", str(aula.id), f"nome={nome}")
     except Exception:
         pass
     return RedirectResponse("/aulas", status_code=302)
@@ -954,13 +1033,16 @@ async def criar_aula_form(
 
 @app.post("/aulas/inscrever")
 async def inscrever_form(
+    request: Request,
     aluno_id: int = Form(...), aula_id: int = Form(...),
     db: Session = Depends(get_tenant_session), _=Depends(get_current_funcionario),
 ):
     from app.schemas.tenant import InscricaoCreate
     from app.services.aula import inscrever_aluno
+    from app.services.auditoria import registrar_auditoria
     try:
         inscrever_aluno(InscricaoCreate(aluno_id=aluno_id, aula_id=aula_id), db)
+        registrar_auditoria(request, db, "inscrever_em_aula", "aula", str(aula_id), f"aluno_id={aluno_id}")
     except Exception:
         pass
     return RedirectResponse("/aulas", status_code=302)
@@ -968,6 +1050,7 @@ async def inscrever_form(
 
 @app.post("/aulas/{aula_id}/editar")
 async def editar_aula_form(
+    request: Request,
     aula_id: int,
     nome: str = Form(...), dia_semana: str = Form(...),
     horario_inicio: str = Form(...), horario_fim: str = Form(...),
@@ -975,6 +1058,7 @@ async def editar_aula_form(
     db: Session = Depends(get_tenant_session), _=Depends(require_admin),
 ):
     from app.models.tenant import Aula, DiaSemana
+    from app.services.auditoria import registrar_auditoria
     aula = db.query(Aula).filter(Aula.id == aula_id).first()
     if aula:
         import datetime as dt
@@ -985,30 +1069,35 @@ async def editar_aula_form(
         aula.professor_id = int(professor_id) if professor_id else None
         aula.capacidade_maxima = capacidade_maxima
         db.commit()
+        registrar_auditoria(request, db, "editar_aula", "aula", str(aula_id), f"nome={nome}")
     return RedirectResponse("/aulas", status_code=302)
 
 
 @app.post("/aulas/{aula_id}/desativar")
 async def desativar_aula_form(
-    aula_id: int, db: Session = Depends(get_tenant_session), _=Depends(require_admin),
+    request: Request, aula_id: int, db: Session = Depends(get_tenant_session), _=Depends(require_admin),
 ):
     from app.models.tenant import Aula
+    from app.services.auditoria import registrar_auditoria
     aula = db.query(Aula).filter(Aula.id == aula_id).first()
     if aula:
         aula.ativa = False
         db.commit()
+        registrar_auditoria(request, db, "desativar_aula", "aula", str(aula_id))
     return RedirectResponse("/aulas", status_code=302)
 
 
 @app.post("/inscricoes/{inscricao_id}/cancelar")
 async def cancelar_inscricao_form(
-    inscricao_id: int, db: Session = Depends(get_tenant_session), _=Depends(get_current_funcionario),
+    request: Request, inscricao_id: int, db: Session = Depends(get_tenant_session), _=Depends(get_current_funcionario),
 ):
     from app.models.tenant import InscricaoAula, InscricaoStatus
+    from app.services.auditoria import registrar_auditoria
     ins = db.query(InscricaoAula).filter(InscricaoAula.id == inscricao_id).first()
     if ins:
         ins.status = InscricaoStatus.cancelada
         db.commit()
+        registrar_auditoria(request, db, "cancelar_inscricao_aula", "inscricao_aula", str(inscricao_id))
     return RedirectResponse("/aulas", status_code=302)
 
 
@@ -1019,8 +1108,12 @@ async def cancelar_inscricao_form(
 @app.get("/funcionarios", response_class=HTMLResponse)
 def funcionarios_page(request: Request, db: Session = Depends(get_tenant_session), _=Depends(require_admin)):
     from app.models.tenant import Funcionario
+    from app.services.auditoria import obter_ultimas_alteracoes_por_recursos
+    funcionarios = db.query(Funcionario).order_by(Funcionario.nome).all()
+    alteracoes = obter_ultimas_alteracoes_por_recursos(db, "funcionario", [str(f.id) for f in funcionarios])
     return templates.TemplateResponse(request, "funcionarios.html", {
-        "funcionarios": db.query(Funcionario).order_by(Funcionario.nome).all()
+        "funcionarios": funcionarios,
+        "alteracoes_funcionario": alteracoes,
     })
 
 
@@ -1144,6 +1237,7 @@ async def disparar_notificacoes(
 def exercicios_page(request: Request, busca: str = None, grupo: str = None,
                     db: Session = Depends(get_tenant_session), _=Depends(get_current_funcionario)):
     from app.models.tenant import Exercicio
+    from app.services.auditoria import obter_ultimas_alteracoes_por_recursos
     q = db.query(Exercicio)
     if busca:
         q = q.filter(Exercicio.nome.ilike(f"%{busca}%"))
@@ -1151,9 +1245,11 @@ def exercicios_page(request: Request, busca: str = None, grupo: str = None,
         q = q.filter(Exercicio.grupo_muscular == grupo)
     exercicios = q.order_by(Exercicio.nome).all()
     grupos = sorted({e.grupo_muscular for e in db.query(Exercicio).all() if e.grupo_muscular})
+    alteracoes = obter_ultimas_alteracoes_por_recursos(db, "exercicio", [str(e.id) for e in exercicios])
     return templates.TemplateResponse(request, "exercicios.html", {
         "exercicios": exercicios, "grupos": grupos,
         "busca": busca, "grupo_filtro": grupo,
+        "alteracoes_exercicio": alteracoes,
     })
 
 
@@ -1164,10 +1260,12 @@ async def criar_exercicio_form(
     db: Session = Depends(get_tenant_session), _=Depends(require_professor_or_admin),
 ):
     from app.services.treino import criar_exercicio
+    from app.services.auditoria import registrar_auditoria
     from app.models.tenant import Exercicio
     success = error = None
     try:
-        criar_exercicio(nome, grupo_muscular or None, descricao or None, db)
+        ex = criar_exercicio(nome, grupo_muscular or None, descricao or None, db)
+        registrar_auditoria(request, db, "criar_exercicio", "exercicio", str(ex.id), f"nome={nome}")
         success = f"Exercício '{nome}' criado!"
     except Exception as e:
         error = str(e)
@@ -1181,11 +1279,13 @@ async def criar_exercicio_form(
 
 @app.post("/exercicios/editar")
 async def editar_exercicio_form(
+    request: Request,
     ex_id: int = Form(...), nome: str = Form(...),
     grupo_muscular: str = Form(None), descricao: str = Form(None), ativo: str = Form("1"),
     db: Session = Depends(get_tenant_session), _=Depends(require_professor_or_admin),
 ):
     from app.models.tenant import Exercicio
+    from app.services.auditoria import registrar_auditoria
     ex = db.query(Exercicio).filter(Exercicio.id == ex_id).first()
     if ex:
         ex.nome = nome
@@ -1193,22 +1293,31 @@ async def editar_exercicio_form(
         ex.descricao = descricao or None
         ex.ativo = ativo == "1"
         db.commit()
+        registrar_auditoria(request, db, "editar_exercicio", "exercicio", str(ex_id), f"ativo={ativo}")
     return RedirectResponse("/exercicios", status_code=302)
 
 
 @app.post("/exercicios/{ex_id}/ativar")
-async def ativar_exercicio(ex_id: int, db: Session = Depends(get_tenant_session), _=Depends(require_professor_or_admin)):
+async def ativar_exercicio(request: Request, ex_id: int, db: Session = Depends(get_tenant_session), _=Depends(require_professor_or_admin)):
     from app.models.tenant import Exercicio
+    from app.services.auditoria import registrar_auditoria
     ex = db.query(Exercicio).filter(Exercicio.id == ex_id).first()
-    if ex: ex.ativo = True; db.commit()
+    if ex:
+        ex.ativo = True
+        db.commit()
+        registrar_auditoria(request, db, "ativar_exercicio", "exercicio", str(ex_id))
     return RedirectResponse("/exercicios", status_code=302)
 
 
 @app.post("/exercicios/{ex_id}/desativar")
-async def desativar_exercicio(ex_id: int, db: Session = Depends(get_tenant_session), _=Depends(require_professor_or_admin)):
+async def desativar_exercicio(request: Request, ex_id: int, db: Session = Depends(get_tenant_session), _=Depends(require_professor_or_admin)):
     from app.models.tenant import Exercicio
+    from app.services.auditoria import registrar_auditoria
     ex = db.query(Exercicio).filter(Exercicio.id == ex_id).first()
-    if ex: ex.ativo = False; db.commit()
+    if ex:
+        ex.ativo = False
+        db.commit()
+        registrar_auditoria(request, db, "desativar_exercicio", "exercicio", str(ex_id))
     return RedirectResponse("/exercicios", status_code=302)
 
 
@@ -1284,10 +1393,15 @@ def superadmin_page(request: Request, db: Session = Depends(get_db), _=Depends(r
 def superadmin_auditoria_page(
     request: Request,
     acao: str = None,
+    resource_type: str = None,
+    resource_id: str = None,
     actor_id: str = None,
     data_inicio: str = None,
     data_fim: str = None,
     ordem: str = "desc",
+    view_mode: str = "table",
+    critical_only: str = "0",
+    risk_level: str = "",
     limit: int = 100,
     offset: int = 0,
     db: Session = Depends(get_db),
@@ -1300,15 +1414,47 @@ def superadmin_auditoria_page(
     limit = max(10, min(limit, 500))
     offset = max(0, offset)
     ordem = "asc" if ordem == "asc" else "desc"
+    high_risk_actions = [
+        "desativar_", "deletar_", "cancelar_", "trocar_senha", "desativar_academia",
+    ]
+    medium_risk_actions = [
+        "registrar_pagamento", "editar_funcionario", "editar_academia", "desativar_plano",
+        "ativar_", "editar_",
+    ]
+
+    def _risk_condition(level: str):
+        if level == "alto":
+            return or_(*[AuditLog.action.ilike(f"{p}%") for p in high_risk_actions])
+        if level == "medio":
+            all_medium = medium_risk_actions + high_risk_actions
+            return or_(*[AuditLog.action.ilike(f"{p}%") for p in all_medium])
+        if level == "baixo":
+            all_medium = medium_risk_actions + high_risk_actions
+            return ~or_(*[AuditLog.action.ilike(f"{p}%") for p in all_medium])
+        return None
+
+    def _apply_critical_filter(query):
+        cond = _risk_condition(risk_level)
+        if cond is not None:
+            return query.filter(cond)
+        if critical_only == "1":
+            return query.filter(_risk_condition("alto"))
+        return query
+
     q = db.query(AuditLog)
     if acao:
         q = q.filter(AuditLog.action.ilike(f"%{acao}%"))
+    if resource_type:
+        q = q.filter(AuditLog.resource_type == resource_type)
+    if resource_id:
+        q = q.filter(AuditLog.resource_id == resource_id)
     if actor_id:
         q = q.filter(AuditLog.actor_id == actor_id)
     if data_inicio:
         q = q.filter(AuditLog.criado_em >= datetime.fromisoformat(data_inicio))
     if data_fim:
         q = q.filter(AuditLog.criado_em < (datetime.fromisoformat(data_fim) + timedelta(days=1)))
+    q = _apply_critical_filter(q)
     order_col = AuditLog.criado_em.asc() if ordem == "asc" else AuditLog.criado_em.desc()
     rows = q.order_by(order_col).offset(offset).limit(limit + 1).all()
     has_next = len(rows) > limit
@@ -1319,12 +1465,17 @@ def superadmin_auditoria_page(
     q_metrics = db.query(AuditLog)
     if acao:
         q_metrics = q_metrics.filter(AuditLog.action.ilike(f"%{acao}%"))
+    if resource_type:
+        q_metrics = q_metrics.filter(AuditLog.resource_type == resource_type)
+    if resource_id:
+        q_metrics = q_metrics.filter(AuditLog.resource_id == resource_id)
     if actor_id:
         q_metrics = q_metrics.filter(AuditLog.actor_id == actor_id)
     if data_inicio:
         q_metrics = q_metrics.filter(AuditLog.criado_em >= datetime.fromisoformat(data_inicio))
     if data_fim:
         q_metrics = q_metrics.filter(AuditLog.criado_em < (datetime.fromisoformat(data_fim) + timedelta(days=1)))
+    q_metrics = _apply_critical_filter(q_metrics)
 
     total_eventos = q_metrics.count()
 
@@ -1353,6 +1504,12 @@ def superadmin_auditoria_page(
         .all()
     )
     volume_diario = list(reversed(volume_diario))
+    timeline_by_day = {}
+    for l in logs:
+        dia = l.criado_em.strftime("%d/%m/%Y") if l.criado_em else "Sem data"
+        if dia not in timeline_by_day:
+            timeline_by_day[dia] = []
+        timeline_by_day[dia].append(l)
 
     return templates.TemplateResponse(
         request,
@@ -1360,10 +1517,15 @@ def superadmin_auditoria_page(
         {
             "logs": logs,
             "acao": acao or "",
+            "resource_type": resource_type or "",
+            "resource_id": resource_id or "",
             "actor_id": actor_id or "",
             "data_inicio": data_inicio or "",
             "data_fim": data_fim or "",
             "ordem": ordem,
+            "view_mode": view_mode if view_mode in ("table", "timeline") else "table",
+            "critical_only": critical_only if critical_only in ("0", "1") else "0",
+            "risk_level": risk_level if risk_level in ("baixo", "medio", "alto") else "",
             "limit": limit,
             "offset": offset,
             "has_prev": has_prev,
@@ -1374,6 +1536,7 @@ def superadmin_auditoria_page(
             "top_acoes": top_acoes,
             "top_atores": top_atores,
             "volume_diario": volume_diario,
+            "timeline_by_day": timeline_by_day,
         },
     )
 
@@ -1381,10 +1544,14 @@ def superadmin_auditoria_page(
 @app.get("/superadmin/auditoria/exportar-csv")
 def superadmin_auditoria_exportar_csv(
     acao: str = None,
+    resource_type: str = None,
+    resource_id: str = None,
     actor_id: str = None,
     data_inicio: str = None,
     data_fim: str = None,
     ordem: str = "desc",
+    critical_only: str = "0",
+    risk_level: str = "",
     limit: int = 500,
     db: Session = Depends(get_db),
     _=Depends(require_superadmin),
@@ -1396,15 +1563,37 @@ def superadmin_auditoria_exportar_csv(
 
     limit = max(10, min(limit, 2000))
     ordem = "asc" if ordem == "asc" else "desc"
+    high_risk_actions = [
+        "desativar_", "deletar_", "cancelar_", "trocar_senha", "desativar_academia",
+    ]
+    medium_risk_actions = [
+        "registrar_pagamento", "editar_funcionario", "editar_academia", "desativar_plano",
+        "ativar_", "editar_",
+    ]
     q = db.query(AuditLog)
     if acao:
         q = q.filter(AuditLog.action.ilike(f"%{acao}%"))
+    if resource_type:
+        q = q.filter(AuditLog.resource_type == resource_type)
+    if resource_id:
+        q = q.filter(AuditLog.resource_id == resource_id)
     if actor_id:
         q = q.filter(AuditLog.actor_id == actor_id)
     if data_inicio:
         q = q.filter(AuditLog.criado_em >= datetime.fromisoformat(data_inicio))
     if data_fim:
         q = q.filter(AuditLog.criado_em < (datetime.fromisoformat(data_fim) + timedelta(days=1)))
+    if risk_level in ("baixo", "medio", "alto"):
+        if risk_level == "alto":
+            q = q.filter(or_(*[AuditLog.action.ilike(f"{p}%") for p in high_risk_actions]))
+        elif risk_level == "medio":
+            all_medium = medium_risk_actions + high_risk_actions
+            q = q.filter(or_(*[AuditLog.action.ilike(f"{p}%") for p in all_medium]))
+        else:
+            all_medium = medium_risk_actions + high_risk_actions
+            q = q.filter(~or_(*[AuditLog.action.ilike(f"{p}%") for p in all_medium]))
+    elif critical_only == "1":
+        q = q.filter(or_(*[AuditLog.action.ilike(f"{p}%") for p in high_risk_actions]))
     order_col = AuditLog.criado_em.asc() if ordem == "asc" else AuditLog.criado_em.desc()
     logs = q.order_by(order_col).limit(limit).all()
 
@@ -1454,7 +1643,11 @@ def superadmin_auditoria_exportar_csv(
 @app.get("/superadmin/auditoria/exportar-metricas-csv")
 def superadmin_auditoria_exportar_metricas_csv(
     acao: str = None,
+    resource_type: str = None,
+    resource_id: str = None,
     actor_id: str = None,
+    critical_only: str = "0",
+    risk_level: str = "",
     data_inicio: str = None,
     data_fim: str = None,
     db: Session = Depends(get_db),
@@ -1466,15 +1659,38 @@ def superadmin_auditoria_exportar_metricas_csv(
     from sqlalchemy import func
     from app.models.public import AuditLog
 
+    high_risk_actions = [
+        "desativar_", "deletar_", "cancelar_", "trocar_senha", "desativar_academia",
+    ]
+    medium_risk_actions = [
+        "registrar_pagamento", "editar_funcionario", "editar_academia", "desativar_plano",
+        "ativar_", "editar_",
+    ]
+
     q = db.query(AuditLog)
     if acao:
         q = q.filter(AuditLog.action.ilike(f"%{acao}%"))
+    if resource_type:
+        q = q.filter(AuditLog.resource_type == resource_type)
+    if resource_id:
+        q = q.filter(AuditLog.resource_id == resource_id)
     if actor_id:
         q = q.filter(AuditLog.actor_id == actor_id)
     if data_inicio:
         q = q.filter(AuditLog.criado_em >= datetime.fromisoformat(data_inicio))
     if data_fim:
         q = q.filter(AuditLog.criado_em < (datetime.fromisoformat(data_fim) + timedelta(days=1)))
+    if risk_level in ("baixo", "medio", "alto"):
+        if risk_level == "alto":
+            q = q.filter(or_(*[AuditLog.action.ilike(f"{p}%") for p in high_risk_actions]))
+        elif risk_level == "medio":
+            all_medium = medium_risk_actions + high_risk_actions
+            q = q.filter(or_(*[AuditLog.action.ilike(f"{p}%") for p in all_medium]))
+        else:
+            all_medium = medium_risk_actions + high_risk_actions
+            q = q.filter(~or_(*[AuditLog.action.ilike(f"{p}%") for p in all_medium]))
+    elif critical_only == "1":
+        q = q.filter(or_(*[AuditLog.action.ilike(f"{p}%") for p in high_risk_actions]))
 
     total_eventos = q.count()
     top_acoes = (
@@ -1523,6 +1739,161 @@ def superadmin_auditoria_exportar_metricas_csv(
 
     output.seek(0)
     filename = f"auditoria_metricas_{date.today().isoformat()}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@app.get("/superadmin/acessos", response_class=HTMLResponse)
+def superadmin_acessos_page(
+    request: Request,
+    path: str = None,
+    actor_id: str = None,
+    status_code: int = None,
+    data_inicio: str = None,
+    data_fim: str = None,
+    ordem: str = "desc",
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    _=Depends(require_superadmin),
+):
+    from app.models.public import AccessLog
+    from datetime import datetime, timedelta
+    from sqlalchemy import func
+
+    limit = max(10, min(limit, 500))
+    offset = max(0, offset)
+    ordem = "asc" if ordem == "asc" else "desc"
+    q = db.query(AccessLog)
+    if path:
+        q = q.filter(AccessLog.path.ilike(f"%{path}%"))
+    if actor_id:
+        q = q.filter(AccessLog.actor_id == actor_id)
+    if status_code:
+        q = q.filter(AccessLog.status_code == status_code)
+    if data_inicio:
+        q = q.filter(AccessLog.criado_em >= datetime.fromisoformat(data_inicio))
+    if data_fim:
+        q = q.filter(AccessLog.criado_em < (datetime.fromisoformat(data_fim) + timedelta(days=1)))
+    order_col = AccessLog.criado_em.asc() if ordem == "asc" else AccessLog.criado_em.desc()
+    rows = q.order_by(order_col).offset(offset).limit(limit + 1).all()
+    has_next = len(rows) > limit
+    logs = rows[:limit]
+    has_prev = offset > 0
+
+    q_metrics = db.query(AccessLog)
+    if path:
+        q_metrics = q_metrics.filter(AccessLog.path.ilike(f"%{path}%"))
+    if actor_id:
+        q_metrics = q_metrics.filter(AccessLog.actor_id == actor_id)
+    if status_code:
+        q_metrics = q_metrics.filter(AccessLog.status_code == status_code)
+    if data_inicio:
+        q_metrics = q_metrics.filter(AccessLog.criado_em >= datetime.fromisoformat(data_inicio))
+    if data_fim:
+        q_metrics = q_metrics.filter(AccessLog.criado_em < (datetime.fromisoformat(data_fim) + timedelta(days=1)))
+
+    total_acessos = q_metrics.count()
+    top_rotas = (
+        q_metrics.with_entities(AccessLog.path, func.count(AccessLog.id).label("total"))
+        .group_by(AccessLog.path)
+        .order_by(func.count(AccessLog.id).desc())
+        .limit(7)
+        .all()
+    )
+    top_status = (
+        q_metrics.with_entities(AccessLog.status_code, func.count(AccessLog.id).label("total"))
+        .group_by(AccessLog.status_code)
+        .order_by(func.count(AccessLog.id).desc())
+        .all()
+    )
+    media_ms = q_metrics.with_entities(func.avg(AccessLog.duration_ms)).scalar() or 0
+
+    return templates.TemplateResponse(
+        request,
+        "superadmin_acessos.html",
+        {
+            "logs": logs,
+            "path": path or "",
+            "actor_id": actor_id or "",
+            "status_code": status_code or "",
+            "data_inicio": data_inicio or "",
+            "data_fim": data_fim or "",
+            "ordem": ordem,
+            "limit": limit,
+            "offset": offset,
+            "has_prev": has_prev,
+            "has_next": has_next,
+            "prev_offset": max(0, offset - limit),
+            "next_offset": offset + limit,
+            "total_acessos": total_acessos,
+            "top_rotas": top_rotas,
+            "top_status": top_status,
+            "media_ms": round(float(media_ms), 1),
+        },
+    )
+
+
+@app.get("/superadmin/acessos/exportar-csv")
+def superadmin_acessos_exportar_csv(
+    path: str = None,
+    actor_id: str = None,
+    status_code: int = None,
+    data_inicio: str = None,
+    data_fim: str = None,
+    ordem: str = "desc",
+    limit: int = 2000,
+    db: Session = Depends(get_db),
+    _=Depends(require_superadmin),
+):
+    import csv
+    import io
+    from datetime import datetime, timedelta
+    from app.models.public import AccessLog
+
+    limit = max(10, min(limit, 5000))
+    ordem = "asc" if ordem == "asc" else "desc"
+    q = db.query(AccessLog)
+    if path:
+        q = q.filter(AccessLog.path.ilike(f"%{path}%"))
+    if actor_id:
+        q = q.filter(AccessLog.actor_id == actor_id)
+    if status_code:
+        q = q.filter(AccessLog.status_code == status_code)
+    if data_inicio:
+        q = q.filter(AccessLog.criado_em >= datetime.fromisoformat(data_inicio))
+    if data_fim:
+        q = q.filter(AccessLog.criado_em < (datetime.fromisoformat(data_fim) + timedelta(days=1)))
+    order_col = AccessLog.criado_em.asc() if ordem == "asc" else AccessLog.criado_em.desc()
+    logs = q.order_by(order_col).limit(limit).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "id", "criado_em", "method", "path", "status_code", "duration_ms",
+        "actor_id", "actor_scope", "actor_role", "schema_name", "ip", "user_agent"
+    ])
+    for l in logs:
+        writer.writerow([
+            l.id,
+            l.criado_em.isoformat() if l.criado_em else "",
+            l.method,
+            l.path,
+            l.status_code,
+            l.duration_ms or "",
+            l.actor_id or "",
+            l.actor_scope or "",
+            l.actor_role or "",
+            l.schema_name or "",
+            l.ip or "",
+            l.user_agent or "",
+        ])
+
+    output.seek(0)
+    filename = f"acessos_{date.today().isoformat()}.csv"
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",

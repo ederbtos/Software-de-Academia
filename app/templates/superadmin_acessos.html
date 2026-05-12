@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Superadmin — Acessos{% endblock %}
+{% block page_title %}<i class="bi bi-activity me-2" style="color:#6366f1;"></i>Monitoramento de Acesso{% endblock %}
+{% block topbar_actions %}
+  <a href="/superadmin" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Voltar
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-3">
+  <div class="col-md-4">
+    <div class="card"><div class="card-body">
+      <div class="text-muted small">Total de acessos</div>
+      <div class="fs-4 fw-bold">{{ total_acessos }}</div>
+    </div></div>
+  </div>
+  <div class="col-md-4">
+    <div class="card"><div class="card-body">
+      <div class="text-muted small">Latência média</div>
+      <div class="fs-4 fw-bold">{{ media_ms }} ms</div>
+    </div></div>
+  </div>
+  <div class="col-md-4">
+    <div class="card"><div class="card-body">
+      <div class="text-muted small mb-2">Top status</div>
+      {% for s in top_status %}
+      <div><code>{{ s[0] }}</code> — {{ s[1] }}</div>
+      {% else %}
+      <span class="text-muted small">Sem dados</span>
+      {% endfor %}
+    </div></div>
+  </div>
+</div>
+
+<div class="card mb-3"><div class="card-body">
+  <form method="get" action="/superadmin/acessos" class="row g-2">
+    <div class="col-md-3"><label class="form-label">Rota</label><input type="text" name="path" value="{{ path }}" class="form-control" placeholder="/alunos"/></div>
+    <div class="col-md-2"><label class="form-label">Actor ID</label><input type="text" name="actor_id" value="{{ actor_id }}" class="form-control"/></div>
+    <div class="col-md-2"><label class="form-label">Status</label><input type="number" name="status_code" value="{{ status_code }}" class="form-control" placeholder="200"/></div>
+    <div class="col-md-2"><label class="form-label">Data início</label><input type="date" name="data_inicio" value="{{ data_inicio }}" class="form-control"/></div>
+    <div class="col-md-2"><label class="form-label">Data fim</label><input type="date" name="data_fim" value="{{ data_fim }}" class="form-control"/></div>
+    <div class="col-md-2"><label class="form-label">Limite</label><input type="number" name="limit" value="{{ limit }}" min="10" max="500" class="form-control"/></div>
+    <div class="col-md-2"><label class="form-label">Ordem</label>
+      <select name="ordem" class="form-select">
+        <option value="desc" {% if ordem == 'desc' %}selected{% endif %}>Mais recente</option>
+        <option value="asc" {% if ordem == 'asc' %}selected{% endif %}>Mais antigo</option>
+      </select>
+    </div>
+    <input type="hidden" name="offset" value="0"/>
+    <div class="col-md-3 d-flex align-items-end"><button type="submit" class="btn btn-primary w-100">Filtrar</button></div>
+    <div class="col-md-3 d-flex align-items-end">
+      <a class="btn btn-outline-success w-100" href="/superadmin/acessos/exportar-csv?path={{ path }}&actor_id={{ actor_id }}&status_code={{ status_code }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&ordem={{ ordem }}&limit={{ limit }}">Exportar CSV</a>
+    </div>
+  </form>
+</div></div>
+
+<div class="card mb-3"><div class="card-body">
+  <div class="text-muted small mb-2">Top rotas</div>
+  {% for r in top_rotas %}
+    <div><code>{{ r[0] }}</code> — {{ r[1] }}</div>
+  {% else %}
+    <span class="text-muted small">Sem dados</span>
+  {% endfor %}
+</div></div>
+
+<div class="card table-card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>Logs de acesso</span><span class="text-muted small">{{ logs|length }} registro(s)</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr><th>Data</th><th>Método</th><th>Rota</th><th>Status</th><th>Duração</th><th>Ator</th><th>IP</th></tr>
+      </thead>
+      <tbody>
+        {% for l in logs %}
+        <tr>
+          <td>{{ l.criado_em.strftime("%d/%m/%Y %H:%M:%S") if l.criado_em else "-" }}</td>
+          <td><code>{{ l.method }}</code></td>
+          <td><code>{{ l.path }}</code></td>
+          <td>{{ l.status_code }}</td>
+          <td>{{ l.duration_ms or "-" }} ms</td>
+          <td>{{ l.actor_id or "-" }}{% if l.actor_role %} ({{ l.actor_role }}){% endif %}</td>
+          <td>{{ l.ip or "-" }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-4">Nenhum acesso encontrado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="d-flex justify-content-between mt-3">
+  <a class="btn btn-outline-secondary btn-sm {% if not has_prev %}disabled{% endif %}"
+     {% if not has_prev %}aria-disabled="true" tabindex="-1"{% endif %}
+     href="/superadmin/acessos?path={{ path }}&actor_id={{ actor_id }}&status_code={{ status_code }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&ordem={{ ordem }}&limit={{ limit }}&offset={{ prev_offset }}">Anterior</a>
+  <a class="btn btn-outline-secondary btn-sm {% if not has_next %}disabled{% endif %}"
+     {% if not has_next %}aria-disabled="true" tabindex="-1"{% endif %}
+     href="/superadmin/acessos?path={{ path }}&actor_id={{ actor_id }}&status_code={{ status_code }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&ordem={{ ordem }}&limit={{ limit }}&offset={{ next_offset }}">Próxima</a>
+</div>
+{% endblock %}

@@ -101,3 +101,22 @@ class AuditLog(Base):
     details = Column(Text, nullable=True)
     ip = Column(String(45), nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class AccessLog(Base):
+    """Log de acessos HTTP para monitoramento operacional e segurança."""
+    __tablename__ = "access_logs"
+    __table_args__ = {"schema": "public"}
+
+    id = Column(Integer, primary_key=True, index=True)
+    method = Column(String(10), nullable=False)
+    path = Column(String(255), nullable=False)
+    status_code = Column(Integer, nullable=False)
+    duration_ms = Column(Integer, nullable=True)
+    actor_id = Column(String(40), nullable=True)
+    actor_scope = Column(String(20), nullable=True)
+    actor_role = Column(String(40), nullable=True)
+    schema_name = Column(String(80), nullable=True)
+    ip = Column(String(45), nullable=True)
+    user_agent = Column(String(255), nullable=True)
+    criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)

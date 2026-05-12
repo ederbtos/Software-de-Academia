@@ -2,6 +2,9 @@
 {% block title %}Superadmin — Auditoria{% endblock %}
 {% block page_title %}<i class="bi bi-shield-check me-2" style="color:#6366f1;"></i>Auditoria{% endblock %}
 {% block topbar_actions %}
+  <a href="/superadmin/acessos" class="btn btn-outline-dark btn-sm">
+    <i class="bi bi-activity me-1"></i>Acessos
+  </a>
   <a href="/superadmin" class="btn btn-outline-secondary btn-sm">
     <i class="bi bi-arrow-left me-1"></i>Voltar
   </a>
@@ -113,6 +116,24 @@
         <label class="form-label">Ação</label>
         <input type="text" name="acao" id="f_acao" value="{{ acao }}" class="form-control" placeholder="ex: criar_academia"/>
       </div>
+      <div class="col-md-2">
+        <label class="form-label">Entidade</label>
+        <select name="resource_type" id="f_resource_type" class="form-select">
+          <option value="" {% if not resource_type %}selected{% endif %}>Todas</option>
+          <option value="aluno" {% if resource_type == 'aluno' %}selected{% endif %}>Aluno</option>
+          <option value="plano" {% if resource_type == 'plano' %}selected{% endif %}>Plano</option>
+          <option value="funcionario" {% if resource_type == 'funcionario' %}selected{% endif %}>Funcionário</option>
+          <option value="matricula" {% if resource_type == 'matricula' %}selected{% endif %}>Matrícula</option>
+          <option value="aula" {% if resource_type == 'aula' %}selected{% endif %}>Aula</option>
+          <option value="exercicio" {% if resource_type == 'exercicio' %}selected{% endif %}>Exercício</option>
+          <option value="treino" {% if resource_type == 'treino' %}selected{% endif %}>Treino</option>
+          <option value="avaliacao" {% if resource_type == 'avaliacao' %}selected{% endif %}>Avaliação</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">ID Entidade</label>
+        <input type="text" name="resource_id" id="f_resource_id" value="{{ resource_id }}" class="form-control" placeholder="ex: 42"/>
+      </div>
       <div class="col-md-3">
         <label class="form-label">Actor ID</label>
         <input type="text" name="actor_id" id="f_actor_id" value="{{ actor_id }}" class="form-control" placeholder="ex: 1"/>
@@ -136,6 +157,29 @@
           <option value="asc" {% if ordem == 'asc' %}selected{% endif %}>Mais antigo</option>
         </select>
       </div>
+      <div class="col-md-2">
+        <label class="form-label">Visualização</label>
+        <select name="view_mode" id="f_view_mode" class="form-select">
+          <option value="table" {% if view_mode != 'timeline' %}selected{% endif %}>Tabela</option>
+          <option value="timeline" {% if view_mode == 'timeline' %}selected{% endif %}>Timeline</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Risco</label>
+        <select name="critical_only" id="f_critical_only" class="form-select">
+          <option value="0" {% if critical_only != '1' %}selected{% endif %}>Todos</option>
+          <option value="1" {% if critical_only == '1' %}selected{% endif %}>Só críticos</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Nível</label>
+        <select name="risk_level" id="f_risk_level" class="form-select">
+          <option value="" {% if not risk_level %}selected{% endif %}>Todos</option>
+          <option value="baixo" {% if risk_level == 'baixo' %}selected{% endif %}>Baixo</option>
+          <option value="medio" {% if risk_level == 'medio' %}selected{% endif %}>Médio+</option>
+          <option value="alto" {% if risk_level == 'alto' %}selected{% endif %}>Alto</option>
+        </select>
+      </div>
       <input type="hidden" name="offset" value="0"/>
       <div class="col-md-3 d-flex align-items-end">
         <button type="submit" class="btn btn-primary w-100">Filtrar</button>
@@ -143,7 +187,7 @@
       <div class="col-md-3 d-flex align-items-end">
         <a
           class="btn btn-outline-success w-100"
-          href="/superadmin/auditoria/exportar-csv?acao={{ acao }}&actor_id={{ actor_id }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&ordem={{ ordem }}&limit={{ limit }}"
+          href="/superadmin/auditoria/exportar-csv?acao={{ acao }}&resource_type={{ resource_type }}&resource_id={{ resource_id }}&actor_id={{ actor_id }}&critical_only={{ critical_only }}&risk_level={{ risk_level }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&ordem={{ ordem }}&limit={{ limit }}"
         >
           Exportar CSV
         </a>
@@ -151,7 +195,7 @@
       <div class="col-md-3 d-flex align-items-end">
         <a
           class="btn btn-outline-primary w-100"
-          href="/superadmin/auditoria/exportar-metricas-csv?acao={{ acao }}&actor_id={{ actor_id }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}"
+          href="/superadmin/auditoria/exportar-metricas-csv?acao={{ acao }}&resource_type={{ resource_type }}&resource_id={{ resource_id }}&actor_id={{ actor_id }}&critical_only={{ critical_only }}&risk_level={{ risk_level }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}"
         >
           Exportar Métricas CSV
         </a>
@@ -160,6 +204,55 @@
   </div>
 </div>
 
+{% if view_mode == 'timeline' %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>Timeline de Mudanças</span>
+    <span class="text-muted small">{{ logs|length }} evento(s)</span>
+  </div>
+  <div class="card-body">
+    {% for dia, itens in timeline_by_day.items() %}
+      <div class="mb-4">
+        <div class="fw-semibold mb-2" style="color:#334155;">
+          <i class="bi bi-calendar-event me-1"></i>{{ dia }}
+        </div>
+        <div class="d-flex flex-column gap-2">
+          {% for l in itens %}
+          <div class="p-2 rounded" style="border:1px solid #e2e8f0;background:#f8fafc;">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+              <div>
+                {% set a = l.action or '' %}
+                {% if a.startswith('criar') %}
+                  <span class="badge" style="background:#dcfce7;color:#166534;">Criação</span>
+                {% elif a.startswith('editar') %}
+                  <span class="badge" style="background:#e0f2fe;color:#0369a1;">Edição</span>
+                {% elif a.startswith('ativar') %}
+                  <span class="badge" style="background:#dcfce7;color:#166534;">Ativação</span>
+                {% elif a.startswith('desativar') or a.startswith('deletar') or a.startswith('cancelar') %}
+                  <span class="badge" style="background:#fee2e2;color:#991b1b;">Desativação/Remoção</span>
+                {% else %}
+                  <span class="badge bg-secondary">Ação</span>
+                {% endif %}
+                <code class="ms-1">{{ l.action }}</code>
+                <span class="ms-2">{{ l.resource_type }}{% if l.resource_id %} #{{ l.resource_id }}{% endif %}</span>
+              </div>
+              <small class="text-muted">{{ l.criado_em.strftime("%H:%M:%S") if l.criado_em else "-" }}</small>
+            </div>
+            <div class="small text-muted mt-1">
+              Ator: {{ l.actor_id or "-" }}{% if l.actor_role %} ({{ l.actor_role }}){% endif %}
+              | IP: {{ l.ip or "-" }}
+              {% if l.details %}| Detalhes: {{ l.details }}{% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% else %}
+      <div class="text-muted">Nenhum evento encontrado.</div>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
 <div class="card table-card">
   <div class="card-header d-flex justify-content-between align-items-center">
     <span>Eventos de Auditoria</span>
@@ -199,19 +292,20 @@
     </table>
   </div>
 </div>
+{% endif %}
 
 <div class="d-flex justify-content-between mt-3">
   <a
     class="btn btn-outline-secondary btn-sm {% if not has_prev %}disabled{% endif %}"
     {% if not has_prev %}aria-disabled="true" tabindex="-1"{% endif %}
-    href="/superadmin/auditoria?acao={{ acao }}&actor_id={{ actor_id }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&ordem={{ ordem }}&limit={{ limit }}&offset={{ prev_offset }}"
+    href="/superadmin/auditoria?acao={{ acao }}&resource_type={{ resource_type }}&resource_id={{ resource_id }}&actor_id={{ actor_id }}&critical_only={{ critical_only }}&risk_level={{ risk_level }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&ordem={{ ordem }}&view_mode={{ view_mode }}&limit={{ limit }}&offset={{ prev_offset }}"
   >
     Anterior
   </a>
   <a
     class="btn btn-outline-secondary btn-sm {% if not has_next %}disabled{% endif %}"
     {% if not has_next %}aria-disabled="true" tabindex="-1"{% endif %}
-    href="/superadmin/auditoria?acao={{ acao }}&actor_id={{ actor_id }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&ordem={{ ordem }}&limit={{ limit }}&offset={{ next_offset }}"
+    href="/superadmin/auditoria?acao={{ acao }}&resource_type={{ resource_type }}&resource_id={{ resource_id }}&actor_id={{ actor_id }}&critical_only={{ critical_only }}&risk_level={{ risk_level }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&ordem={{ ordem }}&view_mode={{ view_mode }}&limit={{ limit }}&offset={{ next_offset }}"
   >
     Próxima
   </a>
@@ -224,7 +318,7 @@ const AUDIT_FILTER_KEY = 'superadmin_auditoria_filters_v1';
 
 function hasQueryFilters() {
   const p = new URLSearchParams(window.location.search);
-  return ['acao', 'actor_id', 'data_inicio', 'data_fim', 'limit', 'ordem'].some(k => p.get(k));
+  return ['acao', 'resource_type', 'resource_id', 'actor_id', 'critical_only', 'risk_level', 'data_inicio', 'data_fim', 'limit', 'ordem', 'view_mode'].some(k => p.get(k));
 }
 
 function applySavedFiltersIfNeeded() {
@@ -235,11 +329,16 @@ function applySavedFiltersIfNeeded() {
     const f = JSON.parse(raw);
     const map = {
       f_acao: f.acao || '',
+      f_resource_type: f.resource_type || '',
+      f_resource_id: f.resource_id || '',
       f_actor_id: f.actor_id || '',
+      f_critical_only: f.critical_only || '0',
+      f_risk_level: f.risk_level || '',
       f_data_inicio: f.data_inicio || '',
       f_data_fim: f.data_fim || '',
       f_limit: f.limit || '',
       f_ordem: f.ordem || 'desc'
+      ,f_view_mode: f.view_mode || 'table'
     };
     Object.entries(map).forEach(([id, value]) => {
       const el = document.getElementById(id);
@@ -254,11 +353,16 @@ function persistFiltersOnSubmit() {
   form.addEventListener('submit', function () {
     const payload = {
       acao: document.getElementById('f_acao')?.value || '',
+      resource_type: document.getElementById('f_resource_type')?.value || '',
+      resource_id: document.getElementById('f_resource_id')?.value || '',
       actor_id: document.getElementById('f_actor_id')?.value || '',
+      critical_only: document.getElementById('f_critical_only')?.value || '0',
+      risk_level: document.getElementById('f_risk_level')?.value || '',
       data_inicio: document.getElementById('f_data_inicio')?.value || '',
       data_fim: document.getElementById('f_data_fim')?.value || '',
       limit: document.getElementById('f_limit')?.value || '100',
       ordem: document.getElementById('f_ordem')?.value || 'desc'
+      ,view_mode: document.getElementById('f_view_mode')?.value || 'table'
     };
     localStorage.setItem(AUDIT_FILTER_KEY, JSON.stringify(payload));
   });

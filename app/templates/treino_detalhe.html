@@ -16,6 +16,20 @@
 {% endblock %}
 
 {% block content %}
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <div class="row g-2" style="font-size:.82rem;">
+      <div class="col-md-6">
+        <span class="text-muted">Última alteração:</span>
+        {% if ultima_alteracao %}<code>{{ ultima_alteracao.action }}</code> em {{ ultima_alteracao.criado_em.strftime("%d/%m/%Y %H:%M") }}{% else %}—{% endif %}
+      </div>
+      <div class="col-md-6">
+        <span class="text-muted">Penúltima alteração:</span>
+        {% if penultima_alteracao %}<code>{{ penultima_alteracao.action }}</code> em {{ penultima_alteracao.criado_em.strftime("%d/%m/%Y %H:%M") }}{% else %}—{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
 <!-- Info card -->
 <div class="card mb-4">
   <div class="card-body">
